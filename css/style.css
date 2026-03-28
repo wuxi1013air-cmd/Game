@@ -297,15 +297,18 @@ main {
   border: 1px solid var(--border);
   background: var(--bg-panel);
   box-shadow: var(--shadow);
+  overflow: visible;
 }
 
 .g2048-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0.5rem;
+  overflow: visible;
 }
 
 .g2048-cell {
+  position: relative;
   aspect-ratio: 1;
   border-radius: 8px;
   background: rgba(30, 36, 54, 0.9);
@@ -313,6 +316,7 @@ main {
   align-items: center;
   justify-content: center;
   min-width: 0;
+  overflow: visible;
 }
 
 .g2048-tile {
@@ -326,6 +330,49 @@ main {
   font-weight: 700;
   font-size: clamp(0.95rem, 5.5vw, 1.65rem);
   transition: background 0.12s, color 0.12s;
+  z-index: 1;
+}
+
+.g2048-tile--sliding {
+  z-index: 3;
+}
+
+@keyframes g2048-spawn {
+  from {
+    transform: scale(0);
+    opacity: 0.45;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.g2048-tile--spawn {
+  animation: g2048-spawn 0.18s ease-out backwards;
+}
+
+@keyframes g2048-merge-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.g2048-tile--merge-pop {
+  animation: g2048-merge-pop 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g2048-tile--spawn,
+  .g2048-tile--merge-pop {
+    animation: none !important;
+  }
 }
 
 .g2048-tile--empty {
