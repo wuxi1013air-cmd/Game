@@ -487,11 +487,87 @@ main {
   min-height: 1.2em;
 }
 
+.ms-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+}
+
 .ms-root {
   display: flex;
   justify-content: center;
   overflow-x: auto;
-  padding: 0.75rem 0.5rem 1rem;
+  padding: 0.75rem 0.5rem 0;
+}
+
+.ms-win-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1.25rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid rgba(110, 231, 183, 0.35);
+  background: linear-gradient(165deg, rgba(30, 36, 54, 0.92) 0%, rgba(18, 22, 34, 0.96) 100%);
+  box-shadow: var(--shadow);
+  max-width: min(100%, 360px);
+}
+
+.ms-win-bar.hidden {
+  display: none;
+}
+
+.ms-win-bar__text {
+  margin: 0;
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 0.95rem;
+}
+
+.ms-end-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+
+.ms-end-modal.hidden {
+  display: none;
+}
+
+.ms-end-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 10, 14, 0.78);
+  backdrop-filter: blur(5px);
+}
+
+.ms-end-modal__panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 320px);
+  padding: 1.5rem 1.35rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.ms-end-modal__title {
+  margin: 0 0 1.25rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--danger);
+}
+
+.ms-end-modal__panel .btn {
+  width: 100%;
 }
 
 .ms-board {
@@ -597,10 +673,48 @@ main {
 }
 
 .ms-cell.mine {
-  background: radial-gradient(circle at 35% 30%, #fecaca 0%, #f87171 45%, #dc2626 100%);
-  color: #450a0a;
-  border: 1px solid rgba(220, 38, 38, 0.5);
-  box-shadow: inset 0 0 8px rgba(127, 29, 29, 0.35);
+  background: radial-gradient(ellipse 100% 100% at 45% 40%, #475569 0%, #1e293b 55%, #0f172a 100%);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -3px 10px rgba(0, 0, 0, 0.45);
+}
+
+.ms-mine-icon {
+  display: block;
+  width: 62%;
+  height: 62%;
+  min-width: 10px;
+  min-height: 10px;
+  border-radius: 50%;
+  position: relative;
+  background: radial-gradient(circle at 32% 28%, #94a3b8 0%, #475569 35%, #1e293b 72%, #020617 100%);
+  box-shadow:
+    inset 2px 3px 5px rgba(255, 255, 255, 0.22),
+    inset -2px -4px 8px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(15, 23, 42, 0.8);
+}
+
+.ms-mine-icon::before {
+  content: "";
+  position: absolute;
+  top: -32%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28%;
+  height: 38%;
+  border-radius: 2px 2px 1px 1px;
+  background: linear-gradient(180deg, #cbd5e1 0%, #64748b 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.ms-mine-icon::after {
+  content: "";
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, rgba(255, 255, 255, 0.35) 0%, transparent 55%);
+  pointer-events: none;
 }
 
 .sol-toolbar-actions {

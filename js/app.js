@@ -57,6 +57,8 @@ document.querySelectorAll("[data-back]").forEach((btn) => {
   btn.addEventListener("click", () => {
     breakoutAdvanceAfterOverlay = false;
     hideOverlay();
+    hideMsWinBar();
+    hideMsLoseModal();
     const sm = document.getElementById("sol-score-modal");
     if (sm) {
       sm.classList.add("hidden");
@@ -202,6 +204,32 @@ window.addEventListener("keydown", (e) => {
 const msRemaining = document.getElementById("ms-remaining");
 const msStatus = document.getElementById("ms-status");
 const msDifficulty = document.getElementById("ms-difficulty");
+const msWinBar = document.getElementById("ms-win-bar");
+const msLoseModal = document.getElementById("ms-lose-modal");
+
+function hideMsWinBar() {
+  if (!msWinBar) return;
+  msWinBar.classList.add("hidden");
+  msWinBar.setAttribute("aria-hidden", "true");
+}
+
+function showMsWinBar() {
+  if (!msWinBar) return;
+  msWinBar.classList.remove("hidden");
+  msWinBar.setAttribute("aria-hidden", "false");
+}
+
+function hideMsLoseModal() {
+  if (!msLoseModal) return;
+  msLoseModal.classList.add("hidden");
+  msLoseModal.setAttribute("aria-hidden", "true");
+}
+
+function showMsLoseModal() {
+  if (!msLoseModal) return;
+  msLoseModal.classList.remove("hidden");
+  msLoseModal.setAttribute("aria-hidden", "false");
+}
 
 const minesApi = createMinesweeper(document.getElementById("ms-root"), {
   onStatus: ({ remaining, dead, won }) => {
@@ -210,18 +238,39 @@ const minesApi = createMinesweeper(document.getElementById("ms-root"), {
     else if (dead) msStatus.textContent = "爆炸";
     else msStatus.textContent = "";
   },
-  onWin: () =>
-    showOverlay("扫雷完成", "所有安全格已翻开，或全部地雷已正确标记。"),
-  onLose: () => showOverlay("踩到雷了", "点击「新局」或返回首页再试。"),
+  onWin: () => {
+    hideOverlay();
+    hideMsLoseModal();
+    showMsWinBar();
+  },
+  onLose: () => {
+    hideOverlay();
+    hideMsWinBar();
+    showMsLoseModal();
+  },
 });
 
 document.getElementById("ms-restart").addEventListener("click", () => {
   hideOverlay();
+  hideMsWinBar();
+  hideMsLoseModal();
+  minesApi.reset();
+});
+
+document.getElementById("ms-win-continue").addEventListener("click", () => {
+  hideMsWinBar();
+  minesApi.reset();
+});
+
+document.getElementById("ms-lose-restart").addEventListener("click", () => {
+  hideMsLoseModal();
   minesApi.reset();
 });
 
 msDifficulty.addEventListener("change", () => {
   hideOverlay();
+  hideMsWinBar();
+  hideMsLoseModal();
   minesApi.setDifficulty(msDifficulty.value);
 });
 
@@ -288,6 +337,8 @@ document.querySelectorAll(".game-card").forEach((card) => {
       snakeApi.reset();
       snakeApi.start();
     } else if (game === "minesweeper") {
+      hideMsWinBar();
+      hideMsLoseModal();
       showView("minesweeper");
       minesApi.setDifficulty(msDifficulty.value);
     } else if (game === "solitaire") {

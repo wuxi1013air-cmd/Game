@@ -73,8 +73,20 @@
           <button type="button" class="btn" id="ms-restart">新局</button>
         </div>
       </div>
-      <div id="ms-root" class="ms-root" aria-live="polite"></div>
-      <p class="hint">翻开所有安全格或给所有地雷插上旗即过关。Shift+左键或右键插旗。左键点数字可和弦翻开</p>
+      <div class="ms-layout">
+        <div id="ms-root" class="ms-root" aria-live="polite"></div>
+        <div id="ms-win-bar" class="ms-win-bar hidden" aria-hidden="true">
+          <p class="ms-win-bar__text">扫雷完成！</p>
+          <button type="button" class="btn" id="ms-win-continue">继续游戏</button>
+        </div>
+      </div>
+      <div id="ms-lose-modal" class="ms-end-modal hidden" aria-hidden="true">
+        <div class="ms-end-modal__backdrop" id="ms-lose-backdrop"></div>
+        <div class="ms-end-modal__panel" role="dialog" aria-modal="true" aria-labelledby="ms-lose-title">
+          <h2 id="ms-lose-title" class="ms-end-modal__title">你输了！</h2>
+          <button type="button" class="btn" id="ms-lose-restart">重新开始</button>
+        </div>
+      </div>
     </section>
 
     <section id="view-solitaire" class="view view-wide">
@@ -86,7 +98,6 @@
         </div>
       </div>
       <div id="sol-root"></div>
-      <p class="hint">拖拽叠牌跟随指针；空列为绿色桌布仅可接 K。双击单张可尝试收牌。得分见「计分」。</p>
     </section>
 
     <section id="view-snake" class="view">
@@ -100,7 +111,6 @@
       </div>
       <div class="snake-wrap">
         <canvas id="snake-canvas" width="400" height="400" aria-label="贪吃蛇游戏区域"></canvas>
-        <p class="hint">使用 ↑ ↓ ← → 或 WASD 控制</p>
       </div>
     </section>
 
@@ -129,7 +139,6 @@
       </div>
       <div class="g2048-wrap">
         <div id="game2048-root"></div>
-        <p class="hint">↑ ↓ ← → 或 WASD 滑动方块</p>
       </div>
     </section>
   </main>

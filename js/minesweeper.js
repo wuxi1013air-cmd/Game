@@ -183,7 +183,11 @@ export function createMinesweeper(rootEl, { onStatus, onWin, onLose }) {
           btn.classList.add("open");
           if (isMine) {
             btn.classList.add("mine");
-            btn.textContent = "●";
+            btn.setAttribute("aria-label", "地雷");
+            const ic = document.createElement("span");
+            ic.className = "ms-mine-icon";
+            ic.setAttribute("aria-hidden", "true");
+            btn.append(ic);
           } else if (board[i] > 0) {
             btn.textContent = String(board[i]);
             btn.dataset.n = String(board[i]);
