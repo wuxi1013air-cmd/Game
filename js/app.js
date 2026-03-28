@@ -143,24 +143,30 @@ const runnerApi = createRunner(runnerCanvas, {
   getBestEl: runnerBestEl,
 });
 
-const arrowUpKey = (e) => e.code === "ArrowUp" || e.key === "ArrowUp";
-const arrowDownKey = (e) => e.code === "ArrowDown" || e.key === "ArrowDown";
+/** 含部分环境对方向键的兼容（避免未拦截时页面滚动/焦点移动「发光」） */
+const arrowUpKey = (e) =>
+  e.code === "ArrowUp" ||
+  e.key === "ArrowUp" ||
+  e.keyCode === 38;
+const arrowDownKey = (e) =>
+  e.code === "ArrowDown" ||
+  e.key === "ArrowDown" ||
+  e.keyCode === 40;
 
 window.addEventListener(
   "keydown",
   (e) => {
     if (!views.runner.classList.contains("active")) return;
+    if (!arrowUpKey(e) && !arrowDownKey(e)) return;
+    // 必须先拦截默认行为：否则 ↑ 会滚动页面或移动焦点（用户看到整页在闪）
+    e.preventDefault();
     if (!runnerApi.isRunning()) return;
     if (arrowUpKey(e)) {
       if (e.repeat) return;
-      e.preventDefault();
       runnerApi.tryJump();
       return;
     }
-    if (arrowDownKey(e)) {
-      e.preventDefault();
-      runnerApi.setSlideKeyHeld(true);
-    }
+    if (arrowDownKey(e)) runnerApi.setSlideKeyHeld(true);
   },
   true,
 );
@@ -171,7 +177,7 @@ window.addEventListener(
     if (!views.runner.classList.contains("active")) return;
     if (!arrowDownKey(e)) return;
     e.preventDefault();
-    runnerApi.setSlideKeyHeld(false);
+    runnerApi.setSlideKeyReleased();
   },
   true,
 );

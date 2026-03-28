@@ -367,7 +367,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl }) {
   function canStandOnGround() {
     const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
     const feet = py + h;
-    return feet >= GROUND_Y - 14 && feet <= GROUND_Y + 8 && vy >= -240;
+    return feet >= GROUND_Y - 22 && feet <= GROUND_Y + 14 && vy >= -400;
   }
 
   function tryJump() {
@@ -434,6 +434,11 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl }) {
     if (down) slideStart();
   }
 
+  /** 松键时无论是否局内都清除按住状态，避免卡住 */
+  function setSlideKeyReleased() {
+    slideKeyHeld = false;
+  }
+
   reset();
 
   return {
@@ -442,6 +447,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl }) {
     stop,
     tryJump,
     setSlideKeyHeld,
+    setSlideKeyReleased,
     isRunning: () => running,
     destroy() {
       stop();
