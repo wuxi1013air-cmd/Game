@@ -6,8 +6,7 @@ const BALL_R = 6;
 const BRICK_H = 22;
 const PADDLE_Y_OFF = 28;
 
-/** 球速区间（每帧像素，较原版更快） */
-const BALL_VX_RANGE = [3.6, 5.4];
+/** 发球与竖直向上分量的速率（挡板水平，发球垂直于挡板即纯向上） */
 const BALL_VY_UP = [4.2, 5.2];
 const BALL_SPEED_CAP = 10.5;
 /** 分裂出的两球速率（与竖直成 45° 向左右上） */
@@ -15,6 +14,8 @@ const SPLIT_SPEED = 5.4;
 const POWERUP_SPAWN_CHANCE = 0.1;
 const POWERUP_FALL_VY = 2.8;
 const POWERUP_R = 11;
+/** 场上小球数量上限 */
+const MAX_BALLS = 20;
 
 export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
   const ctx = canvas.getContext("2d");
@@ -39,13 +40,6 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
 
   function randRange(a, b) {
     return a + Math.random() * (b - a);
-  }
-
-  function randomBallVelocity() {
-    const sign = Math.random() > 0.5 ? 1 : -1;
-    const vx = sign * randRange(BALL_VX_RANGE[0], BALL_VX_RANGE[1]);
-    const vy = -randRange(BALL_VY_UP[0], BALL_VY_UP[1]);
-    return { vx, vy };
   }
 
   function cellKey(r, c) {
@@ -229,14 +223,26 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
     });
   }
 
-  /** 挡板接住：从触点分裂两球，沿左上/右上 45°（相对水平向上） */
-  function applySplitPickup(pu) {
-    const py = H - PADDLE_Y_OFF;
-    const spawnX = Math.max(BALL_R, Math.min(W - BALL_R, pu.x));
-    const spawnY = Math.min(pu.y, py - BALL_R - 2);
-    const h = SPLIT_SPEED / Math.SQRT2;
-    balls.push({ x: spawnX, y: spawnY, vx: -h, vy: -h });
-    balls.push({ x: spawnX, y: spawnY, vx: h, vy: -h });
+  /**
+   * 挡板接住技能：场上每一颗球各分裂一次（原位置两颗 45° 球），无球时在贴挡板位置按一颗分裂。
+   * 总数不超过 MAX_BALLS，先处理的球优先占满名额。
+   */
+  function applySplitPickup() {
+    const hsp = SPLIT_SPEED / Math.SQRT2;
+    const snap = balls.length > 0 ? balls.slice() : null;
+    const sources =
+      snap && snap.length > 0 ? snap : [{ ...heldBallPos(), vx: 0, vy: 0 }];
+
+    const next = [];
+    for (const b of sources) {
+      if (next.length >= MAX_BALLS) break;
+      const sx = Math.max(BALL_R, Math.min(W - BALL_R, b.x));
+      const sy = Math.max(BALL_R, Math.min(H - PADDLE_Y_OFF - BALL_R - 8, b.y));
+      next.push({ x: sx, y: sy, vx: -hsp, vy: -hsp });
+      if (next.length >= MAX_BALLS) break;
+      next.push({ x: sx, y: sy, vx: hsp, vy: -hsp });
+    }
+    balls = next;
     launched = true;
   }
 
@@ -247,7 +253,7 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
       const hitY = pu.y + pu.r >= py - 2 && pu.y - pu.r <= py + PADDLE_H + 4;
       const hitX = pu.x + pu.r >= paddleX && pu.x - pu.r <= paddleX + PADDLE_W;
       if (hitX && hitY) {
-        applySplitPickup(pu);
+        applySplitPickup();
         continue;
       }
       if (pu.y - pu.r > H + 30) continue;
@@ -548,9 +554,9 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
 
   function launchBall() {
     if (!running || launched) return;
-    const v = randomBallVelocity();
     const h = heldBallPos();
-    balls.push({ x: h.x, y: h.y, vx: v.vx, vy: v.vy });
+    const sp = randRange(BALL_VY_UP[0], BALL_VY_UP[1]);
+    balls.push({ x: h.x, y: h.y, vx: 0, vy: -sp });
     launched = true;
   }
 
