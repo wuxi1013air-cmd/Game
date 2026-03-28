@@ -19,7 +19,7 @@
       <span class="logo-icon">◆</span>
       <span>Mini Arcade</span>
     </div>
-    <p class="tagline">扫雷 · 纸牌 · 贪吃蛇 · 打砖块 · 2048 · 纯前端 GitHub Pages</p>
+    <p class="tagline">扫雷 · 纸牌 · 贪吃蛇 · 打砖块 · 2048 · 三角幸存者 · 纯前端 GitHub Pages</p>
   </header>
 
   <main>
@@ -50,6 +50,11 @@
           <span class="card-emoji">🔢</span>
           <span class="card-name">2048</span>
           <span class="card-desc">合并数字，凑出 2048</span>
+        </button>
+        <button type="button" class="game-card" data-game="survivor">
+          <span class="card-emoji">🔺</span>
+          <span class="card-name">三角幸存者</span>
+          <span class="card-desc">类吸血鬼幸存者：WASD 移动，清波选卡；第 12 波五边形 Boss</span>
         </button>
       </div>
     </section>
@@ -138,6 +143,22 @@
         <div id="game2048-root"></div>
       </div>
     </section>
+
+    <section id="view-survivor" class="view">
+      <div class="game-toolbar">
+        <button type="button" class="btn ghost" data-back>← 返回</button>
+        <div class="stats survivor-toolbar-stats">
+          <span>生命 <strong id="survivor-hp">120</strong> / 120</span>
+          <span>波次 <strong id="survivor-wave">1</strong></span>
+          <span id="survivor-sub" class="survivor-sub"></span>
+        </div>
+        <button type="button" class="btn" id="survivor-restart">重新开始</button>
+      </div>
+      <p class="survivor-hint">WASD 或方向键移动；手枪自动瞄准最近敌人。普通敌人为方形（接触伤害随波次升高，上限 25）；第 12 波为大型五边形 Boss（伤害 50）。每波清空后三选一强化，选完后 3 秒出怪。</p>
+      <div class="survivor-wrap">
+        <canvas id="survivor-canvas" width="720" height="405" aria-label="三角幸存者游戏区域" tabindex="0"></canvas>
+      </div>
+    </section>
   </main>
 
   <footer class="site-footer">
@@ -160,6 +181,15 @@
       </div>
       <p class="sol-modal__rules">规则：收到右上角 +10；翻开压牌 +5；废牌移到列 +5；列间移整叠 +3；废牌收库一圈 −20。</p>
       <button type="button" class="btn sol-modal__close" id="sol-modal-close">关闭</button>
+    </div>
+  </div>
+
+  <div id="survivor-card-modal" class="survivor-card-modal hidden" aria-hidden="true">
+    <div class="survivor-card-modal__backdrop" id="survivor-card-modal-backdrop"></div>
+    <div class="survivor-card-modal__panel" role="dialog" aria-modal="true" aria-labelledby="survivor-card-modal-title">
+      <h2 id="survivor-card-modal-title" class="survivor-card-modal__title">波次完成</h2>
+      <p id="survivor-card-modal-sub" class="survivor-card-modal__sub">选择一张强化卡牌</p>
+      <div id="survivor-card-grid" class="survivor-card-grid"></div>
     </div>
   </div>
 

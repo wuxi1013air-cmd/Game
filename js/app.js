@@ -3,6 +3,7 @@ import { createMinesweeper } from "./minesweeper.js";
 import { createSolitaire } from "./solitaire.js";
 import { createBreakout } from "./breakout.js";
 import { createGame2048 } from "./game2048.js";
+import { createSurvivor } from "./survivor.js";
 
 const views = {
   home: document.getElementById("view-home"),
@@ -11,6 +12,7 @@ const views = {
   solitaire: document.getElementById("view-solitaire"),
   breakout: document.getElementById("view-breakout"),
   game2048: document.getElementById("view-2048"),
+  survivor: document.getElementById("view-survivor"),
 };
 
 const overlay = document.getElementById("overlay");
@@ -66,6 +68,8 @@ document.querySelectorAll("[data-back]").forEach((btn) => {
     }
     snakeApi.stop();
     breakoutApi.stop();
+    survivorApi.stop();
+    hideSurvivorCardModal();
     showView("home");
   });
 });
@@ -200,6 +204,107 @@ window.addEventListener("keydown", (e) => {
   e.preventDefault();
   game2048Api.input(dir);
 });
+
+const survivorCardModal = document.getElementById("survivor-card-modal");
+const survivorCardGrid = document.getElementById("survivor-card-grid");
+const survivorCardTitle = document.getElementById("survivor-card-modal-title");
+const survivorCardSub = document.getElementById("survivor-card-modal-sub");
+
+function hideSurvivorCardModal() {
+  if (!survivorCardModal) return;
+  survivorCardModal.classList.add("hidden");
+  survivorCardModal.setAttribute("aria-hidden", "true");
+}
+
+function showSurvivorCardModal() {
+  if (!survivorCardModal) return;
+  survivorCardModal.classList.remove("hidden");
+  survivorCardModal.setAttribute("aria-hidden", "false");
+}
+
+const survivorHpEl = document.getElementById("survivor-hp");
+const survivorWaveEl = document.getElementById("survivor-wave");
+const survivorSubEl = document.getElementById("survivor-sub");
+
+const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
+  onHud: ({ hp, maxHp, wave, sub }) => {
+    survivorHpEl.textContent = `${hp} / ${maxHp}`;
+    survivorWaveEl.textContent = String(wave);
+    survivorSubEl.textContent = sub || "";
+  },
+  onOfferCards: ({ wave, options }) => {
+    survivorCardTitle.textContent = `完成第 ${wave} 波`;
+    survivorCardSub.textContent = "三选一强化，选完后 3 秒出现下一波敌人";
+    survivorCardGrid.innerHTML = "";
+    for (const opt of options) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "survivor-card-btn";
+      btn.innerHTML = `<span class="survivor-card-btn__title">${opt.title}</span><span class="survivor-card-btn__desc">${opt.desc}</span>`;
+      btn.addEventListener("click", () => {
+        survivorApi.pickCard(opt.id);
+        hideSurvivorCardModal();
+      });
+      survivorCardGrid.appendChild(btn);
+    }
+    showSurvivorCardModal();
+  },
+  onHideCards: () => {
+    hideSurvivorCardModal();
+  },
+  onGameOver: (w) => {
+    showOverlay("阵亡", `坚持到第 ${w} 波。`);
+  },
+  onVictory: () => {
+    showOverlay("胜利", "五边形 Boss 已被击毁！第 12 波通关。");
+  },
+});
+
+document.getElementById("survivor-restart").addEventListener("click", () => {
+  hideOverlay();
+  hideSurvivorCardModal();
+  survivorApi.reset();
+  survivorApi.start();
+});
+
+function survivorKeyDown(e) {
+  if (!views.survivor.classList.contains("active")) return;
+  const k = e.key;
+  if (k === "ArrowUp" || k === "w" || k === "W") {
+    survivorApi.setKey("up", true);
+    e.preventDefault();
+  } else if (k === "ArrowDown" || k === "s" || k === "S") {
+    survivorApi.setKey("down", true);
+    e.preventDefault();
+  } else if (k === "ArrowLeft" || k === "a" || k === "A") {
+    survivorApi.setKey("left", true);
+    e.preventDefault();
+  } else if (k === "ArrowRight" || k === "d" || k === "D") {
+    survivorApi.setKey("right", true);
+    e.preventDefault();
+  }
+}
+
+function survivorKeyUp(e) {
+  if (!views.survivor.classList.contains("active")) return;
+  const k = e.key;
+  if (k === "ArrowUp" || k === "w" || k === "W") {
+    survivorApi.setKey("up", false);
+    e.preventDefault();
+  } else if (k === "ArrowDown" || k === "s" || k === "S") {
+    survivorApi.setKey("down", false);
+    e.preventDefault();
+  } else if (k === "ArrowLeft" || k === "a" || k === "A") {
+    survivorApi.setKey("left", false);
+    e.preventDefault();
+  } else if (k === "ArrowRight" || k === "d" || k === "D") {
+    survivorApi.setKey("right", false);
+    e.preventDefault();
+  }
+}
+
+window.addEventListener("keydown", survivorKeyDown, true);
+window.addEventListener("keyup", survivorKeyUp, true);
 
 const msRemaining = document.getElementById("ms-remaining");
 const msStatus = document.getElementById("ms-status");
@@ -352,6 +457,13 @@ document.querySelectorAll(".game-card").forEach((card) => {
     } else if (game === "game2048") {
       showView("game2048");
       game2048Api.reset();
+    } else if (game === "survivor") {
+      hideOverlay();
+      hideSurvivorCardModal();
+      showView("survivor");
+      survivorApi.reset();
+      survivorApi.start();
+      document.getElementById("survivor-canvas")?.focus({ preventScroll: true });
     }
   });
 });

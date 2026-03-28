@@ -872,6 +872,138 @@ main {
   width: 100%;
 }
 
+.survivor-toolbar-stats {
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+}
+
+.survivor-sub {
+  font-size: 0.78rem;
+  color: var(--accent-dim);
+  max-width: 12rem;
+}
+
+.survivor-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.45;
+  text-align: center;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.survivor-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+#survivor-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: #0a0d12;
+  box-shadow: var(--shadow);
+  touch-action: none;
+}
+
+#survivor-canvas:focus,
+#survivor-canvas:focus-visible {
+  outline: 2px solid var(--accent-dim);
+  outline-offset: 2px;
+}
+
+.survivor-card-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.survivor-card-modal.hidden {
+  display: none;
+}
+
+.survivor-card-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 10, 14, 0.82);
+  backdrop-filter: blur(6px);
+}
+
+.survivor-card-modal__panel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 520px;
+  padding: 1.35rem 1.25rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow);
+}
+
+.survivor-card-modal__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.survivor-card-modal__sub {
+  margin: 0 0 1.1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.survivor-card-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.survivor-card-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  text-align: left;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(110, 231, 183, 0.06);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.survivor-card-btn:hover {
+  border-color: var(--accent-dim);
+  background: rgba(110, 231, 183, 0.12);
+}
+
+.survivor-card-btn__title {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.survivor-card-btn__desc {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .solitaire {
   --sol-w: 3.65rem;
   --sol-h: 5.15rem;
