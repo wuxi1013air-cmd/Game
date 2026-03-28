@@ -9,7 +9,6 @@ const SCORE_RECYCLE = -20;
 const DRAG_THRESHOLD = 6;
 const STACK_GAP = 28;
 const BEST_KEY = "mini-arcade-solitaire-best";
-const DRAG_SMOOTH = 0.88;
 const DRAG_FAN_X = 1.4;
 const DRAG_FAN_ROT = 0.55;
 
@@ -237,31 +236,14 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
     g.className = "sol-drag-ghost";
     g.style.pointerEvents = "none";
 
-    let tx = clientX - offX;
-    let ty = clientY - offY;
-    let lx = tx;
-    let ly = ty;
-    let rafId = 0;
-    let alive = true;
-
-    function tick() {
-      if (!alive) return;
-      lx += (tx - lx) * DRAG_SMOOTH;
-      ly += (ty - ly) * DRAG_SMOOTH;
-      g.style.transform = `translate3d(${lx}px, ${ly}px, 0) scale(1.05)`;
-      rafId = requestAnimationFrame(tick);
+    function applyPos(cx, cy) {
+      const x = cx - offX;
+      const y = cy - offY;
+      g.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.05)`;
     }
 
     function move(cx, cy) {
-      tx = cx - offX;
-      ty = cy - offY;
-      if (!rafId) rafId = requestAnimationFrame(tick);
-    }
-
-    function stopRaf() {
-      alive = false;
-      cancelAnimationFrame(rafId);
-      rafId = 0;
+      applyPos(cx, cy);
     }
 
     cards.forEach((c, i) => {
@@ -275,10 +257,13 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
     });
 
     document.body.append(g);
-    g.style.transform = `translate3d(${lx}px, ${ly}px, 0) scale(1.05)`;
-    rafId = requestAnimationFrame(tick);
+    applyPos(clientX, clientY);
 
-    return { el: g, move, stopRaf };
+    return { el: g, move };
+  }
+
+  function removeAllDragGhosts() {
+    document.body.querySelectorAll(".sol-drag-ghost").forEach((node) => node.remove());
   }
 
   function findDropTargetEl(x, y) {
@@ -307,12 +292,15 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
   }
 
   function endDrag() {
-    if (!drag) return;
-    if (drag.ghost?.stopRaf) drag.ghost.stopRaf();
-    if (drag.ghost?.el) drag.ghost.el.remove();
+    if (!drag) {
+      removeAllDragGhosts();
+      return;
+    }
     const els = drag.sourceEls || drag.pending?.sourceEls;
+    if (drag.ghost?.el) drag.ghost.el.remove();
+    removeAllDragGhosts();
     els?.forEach((el) => {
-      el.style.opacity = "";
+      if (el && el.isConnected) el.style.opacity = "";
     });
     drag = null;
   }
@@ -330,6 +318,7 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
       }
       return;
     }
+    e.preventDefault();
     drag.ghost.move(e.clientX, e.clientY);
   }
 
@@ -379,16 +368,32 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
       };
       inner.setPointerCapture(e.pointerId);
       const capMove = (ev) => onGlobalPointerMove(ev);
-      const capUp = (ev) => {
-        inner.releasePointerCapture(ev.pointerId);
+      const cleanup = (ev) => {
+        try {
+          inner.releasePointerCapture(ev.pointerId);
+        } catch {
+          /* 已丢失捕获时可能抛错 */
+        }
         inner.removeEventListener("pointermove", capMove);
         inner.removeEventListener("pointerup", capUp);
         inner.removeEventListener("pointercancel", capUp);
+        inner.removeEventListener("lostpointercapture", capLost);
+      };
+      const capLost = () => {
+        inner.removeEventListener("pointermove", capMove);
+        inner.removeEventListener("pointerup", capUp);
+        inner.removeEventListener("pointercancel", capUp);
+        inner.removeEventListener("lostpointercapture", capLost);
+        endDrag();
+      };
+      const capUp = (ev) => {
+        cleanup(ev);
         onGlobalPointerUp(ev);
       };
       inner.addEventListener("pointermove", capMove);
       inner.addEventListener("pointerup", capUp);
       inner.addEventListener("pointercancel", capUp);
+      inner.addEventListener("lostpointercapture", capLost);
     });
   }
 
