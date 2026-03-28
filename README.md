@@ -36,6 +36,21 @@ git push -u origin main
 
 若仓库名为 `<用户名>.github.io` 且放在根目录，则站点为 `https://<用户名>.github.io/`。
 
+## 上传更新（日常推送）
+
+本地改完代码后，在项目根目录执行（把提交说明改成你本次改动）：
+
+```bash
+cd ~/mini-games-site
+git status
+git add -A
+git commit -m "描述本次修改"
+git push origin main
+```
+
+- 远程分支若不是 `main`，把最后一行里的 `main` 改成你的分支名。
+- 推送后等 **1～3 分钟**，GitHub Pages 会自动更新；可 **强制刷新** 或 **无痕窗口** 避免缓存。
+
 ## 项目结构
 
 ```

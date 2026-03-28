@@ -10,7 +10,10 @@ const DRAG_THRESHOLD = 6;
 const STACK_GAP = 28;
 const BEST_KEY = "mini-arcade-solitaire-best";
 const SUIT_NAMES = ["黑桃", "红心", "方块", "梅花"];
-const DRAG_SMOOTH = 0.34;
+const DRAG_SMOOTH = 0.19;
+const DRAG_TILT_SMOOTH = 0.28;
+const DRAG_FAN_X = 1.9;
+const DRAG_FAN_ROT = 0.75;
 
 function isRed(suit) {
   return suit === 1 || suit === 2;
@@ -240,6 +243,7 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
     let ty = clientY - offY;
     let lx = tx;
     let ly = ty;
+    let tilt = 0;
     let rafId = 0;
     let alive = true;
 
@@ -247,7 +251,9 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
       if (!alive) return;
       lx += (tx - lx) * DRAG_SMOOTH;
       ly += (ty - ly) * DRAG_SMOOTH;
-      g.style.transform = `translate3d(${lx}px, ${ly}px, 0)`;
+      const targetTilt = Math.max(-7, Math.min(7, (tx - lx) * 0.14));
+      tilt += (targetTilt - tilt) * DRAG_TILT_SMOOTH;
+      g.style.transform = `translate3d(${lx}px, ${ly}px, 0) scale(1.07) rotate(${tilt}deg)`;
       rafId = requestAnimationFrame(tick);
     }
 
@@ -267,12 +273,14 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
       const shell = document.createElement("div");
       shell.className = "sol-drag-layer";
       shell.style.top = `${i * STACK_GAP}px`;
+      shell.style.transform = `translateX(${i * DRAG_FAN_X}px) rotate(${i * DRAG_FAN_ROT}deg)`;
+      shell.style.zIndex = String(10 + i);
       shell.innerHTML = c.faceUp ? buildCardFaceHTML(c) : '<div class="sol-card sol-card--poker sol-card--back"></div>';
       g.append(shell);
     });
 
     document.body.append(g);
-    g.style.transform = `translate3d(${lx}px, ${ly}px, 0)`;
+    g.style.transform = `translate3d(${lx}px, ${ly}px, 0) scale(1.07) rotate(0deg)`;
     rafId = requestAnimationFrame(tick);
 
     return { el: g, move, stopRaf };
@@ -579,6 +587,17 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
         }
         colEl.append(wrap);
       });
+
+      if (pile.length === 0) {
+        const slot = document.createElement("div");
+        slot.className = "sol-tableau-slot";
+        slot.dataset.solDrop = `T${c}`;
+        slot.setAttribute("aria-label", "空列，仅可放置 K");
+        slot.innerHTML =
+          '<span class="sol-tableau-slot__mark">K</span><span class="sol-tableau-slot__hint">空列可接牌</span>';
+        colEl.append(slot);
+      }
+
       tab.append(colEl);
     }
     rootEl.append(tab);
