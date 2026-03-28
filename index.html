@@ -65,15 +65,16 @@
           <label class="ms-diff">
             <span class="visually-hidden">难度</span>
             <select id="ms-difficulty" aria-label="难度">
-              <option value="beginner">初级 9×9</option>
-              <option value="intermediate" selected>中级 16×14</option>
+              <option value="beginner">初级 9×9 · 10 雷</option>
+              <option value="intermediate" selected>中级 16×14 · 40 雷</option>
+              <option value="advanced">高级 20×12 · 48 雷</option>
             </select>
           </label>
           <button type="button" class="btn" id="ms-restart">新局</button>
         </div>
       </div>
       <div id="ms-root" class="ms-root" aria-live="polite"></div>
-      <p class="hint">左键点已翻开的数字：若周围旗数等于该数字，会翻开其余相邻格</p>
+      <p class="hint">翻开所有安全格或给所有地雷插上旗即过关。Shift+左键或右键插旗。左键点数字可和弦翻开</p>
     </section>
 
     <section id="view-solitaire" class="view view-wide">

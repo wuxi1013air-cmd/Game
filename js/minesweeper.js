@@ -1,6 +1,7 @@
 const DIFFICULTIES = {
   beginner: { cols: 9, rows: 9, mines: 10 },
   intermediate: { cols: 16, rows: 14, mines: 40 },
+  advanced: { cols: 20, rows: 12, mines: 48 },
 };
 
 export function createMinesweeper(rootEl, { onStatus, onWin, onLose }) {
@@ -121,14 +122,30 @@ export function createMinesweeper(rootEl, { onStatus, onWin, onLose }) {
     }
   }
 
-  function checkWin() {
-    let hidden = 0;
-    for (let i = 0; i < board.length; i++) {
-      if (!revealed[i] && board[i] !== -1) hidden++;
+  function revealAllEndGame() {
+    for (let j = 0; j < board.length; j++) {
+      revealed[j] = true;
     }
-    if (hidden === 0 && !gameOver) {
+  }
+
+  /** 胜利：① 所有非雷格已翻开 ② 或所有雷格均已插旗（雷已布下后判定） */
+  function checkWin() {
+    if (won || gameOver || firstClick) return;
+
+    let hiddenSafe = 0;
+    let allMinesFlagged = true;
+    for (let i = 0; i < board.length; i++) {
+      if (board[i] === -1) {
+        if (!flagged[i]) allMinesFlagged = false;
+      } else if (!revealed[i]) {
+        hiddenSafe++;
+      }
+    }
+
+    if (hiddenSafe === 0 || allMinesFlagged) {
       won = true;
       gameOver = true;
+      revealAllEndGame();
       onWin();
     }
   }
@@ -179,6 +196,7 @@ export function createMinesweeper(rootEl, { onStatus, onWin, onLose }) {
             e.preventDefault();
             if (!revealed[i] && !won) {
               flagged[i] = !flagged[i];
+              checkWin();
               render();
               updateStatus();
             }
@@ -199,6 +217,7 @@ export function createMinesweeper(rootEl, { onStatus, onWin, onLose }) {
           e.preventDefault();
           if (gameOver || revealed[i]) return;
           flagged[i] = !flagged[i];
+          checkWin();
           render();
           updateStatus();
         });

@@ -210,7 +210,8 @@ const minesApi = createMinesweeper(document.getElementById("ms-root"), {
     else if (dead) msStatus.textContent = "爆炸";
     else msStatus.textContent = "";
   },
-  onWin: () => showOverlay("扫雷完成", "所有安全格已翻开！"),
+  onWin: () =>
+    showOverlay("扫雷完成", "所有安全格已翻开，或全部地雷已正确标记。"),
   onLose: () => showOverlay("踩到雷了", "点击「新局」或返回首页再试。"),
 });
 

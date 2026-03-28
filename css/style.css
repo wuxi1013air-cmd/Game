@@ -491,84 +491,116 @@ main {
   display: flex;
   justify-content: center;
   overflow-x: auto;
-  padding-bottom: 0.5rem;
+  padding: 0.75rem 0.5rem 1rem;
 }
 
 .ms-board {
   display: grid;
-  gap: 2px;
+  gap: 3px;
   width: max-content;
   max-width: 100%;
   margin: 0 auto;
+  padding: 10px;
+  border-radius: 14px;
+  background: linear-gradient(165deg, rgba(30, 36, 54, 0.95) 0%, rgba(18, 22, 34, 0.98) 100%);
+  border: 1px solid rgba(110, 231, 183, 0.12);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .ms-cell {
-  width: clamp(22px, 4.2vw, 28px);
-  height: clamp(22px, 4.2vw, 28px);
+  width: clamp(20px, 3.6vw, 26px);
+  height: clamp(20px, 3.6vw, 26px);
   padding: 0;
   border: none;
-  border-radius: 2px;
+  border-radius: 6px;
   font-family: var(--font-mono);
-  font-size: clamp(0.65rem, 2.8vw, 0.85rem);
+  font-size: clamp(0.62rem, 2.5vw, 0.8rem);
   font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
 }
 
 .ms-cell:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 .ms-cell.covered {
-  background: linear-gradient(180deg, #c0c0c0 0%, #808080 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  background: linear-gradient(160deg, #4a5568 0%, #2d3748 48%, #252d3d 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.35),
+    0 2px 4px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(110, 231, 183, 0.08);
 }
 
 .ms-cell.covered:hover:not(:disabled) {
-  filter: brightness(1.08);
+  filter: brightness(1.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(110, 231, 183, 0.25);
+}
+
+.ms-cell.covered:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .ms-cell.flagged {
-  background: linear-gradient(180deg, #b45309 0%, #78350f 100%);
+  background: linear-gradient(160deg, #d97706 0%, #b45309 45%, #7c2d12 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(251, 191, 36, 0.35);
 }
 
 .ms-cell.open {
-  background: #c6c6c6;
-  color: #111;
+  background: radial-gradient(ellipse 120% 100% at 50% 20%, #e2e8f0 0%, #cbd5e1 55%, #94a3b8 100%);
+  color: #0f172a;
   cursor: default;
+  box-shadow: inset 0 2px 6px rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .ms-cell.open[data-n="1"] {
-  color: #0000f0;
+  color: #1d4ed8;
 }
 .ms-cell.open[data-n="2"] {
-  color: #008200;
+  color: #047857;
 }
 .ms-cell.open[data-n="3"] {
-  color: #f00000;
+  color: #dc2626;
 }
 .ms-cell.open[data-n="4"] {
-  color: #000084;
+  color: #4338ca;
 }
 .ms-cell.open[data-n="5"] {
-  color: #840000;
+  color: #b45309;
 }
 .ms-cell.open[data-n="6"] {
-  color: #008284;
+  color: #0d9488;
 }
 .ms-cell.open[data-n="7"] {
-  color: #000000;
+  color: #1e293b;
 }
 .ms-cell.open[data-n="8"] {
-  color: #848484;
+  color: #64748b;
 }
 
 .ms-cell.mine {
-  background: #f87171;
-  color: #1f0000;
+  background: radial-gradient(circle at 35% 30%, #fecaca 0%, #f87171 45%, #dc2626 100%);
+  color: #450a0a;
+  border: 1px solid rgba(220, 38, 38, 0.5);
+  box-shadow: inset 0 0 8px rgba(127, 29, 29, 0.35);
 }
 
 .sol-toolbar-actions {
