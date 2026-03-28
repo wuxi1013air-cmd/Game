@@ -11,6 +11,7 @@ const STACK_GAP = 28;
 const BEST_KEY = "mini-arcade-solitaire-best";
 const DRAG_FAN_X = 1.4;
 const DRAG_FAN_ROT = 0.55;
+const DRAG_SOURCE_CLASS = "sol-drag-source";
 
 function isRed(suit) {
   return suit === 1 || suit === 2;
@@ -53,6 +54,8 @@ function saveBest(n) {
 }
 
 export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => false }) {
+  rootEl.addEventListener("dragstart", (ev) => ev.preventDefault());
+
   let stock = [];
   let waste = [];
   let foundations = [[], [], [], []];
@@ -233,13 +236,13 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
 
   function makeDragGhost(cards, clientX, clientY, offX, offY) {
     const g = document.createElement("div");
-    g.className = "sol-drag-ghost";
+    g.className = "sol-drag-ghost sol-drag-ghost--lift";
     g.style.pointerEvents = "none";
 
     function applyPos(cx, cy) {
-      const x = cx - offX;
-      const y = cy - offY;
-      g.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.05)`;
+      const x = Math.round(cx - offX);
+      const y = Math.round(cy - offY);
+      g.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.07)`;
     }
 
     function move(cx, cy) {
@@ -266,6 +269,17 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
     document.body.querySelectorAll(".sol-drag-ghost").forEach((node) => node.remove());
   }
 
+  function clearDragSourceMarks() {
+    rootEl.querySelectorAll(`.${DRAG_SOURCE_CLASS}`).forEach((el) => {
+      el.classList.remove(DRAG_SOURCE_CLASS);
+      el.style.removeProperty("opacity");
+    });
+  }
+
+  function setBodyDragging(on) {
+    document.body.classList.toggle("sol-body-dragging", on);
+  }
+
   function findDropTargetEl(x, y) {
     const stack = document.elementsFromPoint(x, y);
     for (const el of stack) {
@@ -279,6 +293,7 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
   }
 
   function startDrag(src, clientX, clientY, offX, offY, sourceEls) {
+    setBodyDragging(true);
     drag = {
       src,
       offX,
@@ -287,22 +302,22 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
       sourceEls,
     };
     sourceEls.forEach((el) => {
-      el.style.opacity = "0.3";
+      if (el?.isConnected) el.classList.add(DRAG_SOURCE_CLASS);
     });
   }
 
   function endDrag() {
-    if (!drag) {
-      removeAllDragGhosts();
-      return;
+    if (drag?.ghost?.el) {
+      try {
+        drag.ghost.el.remove();
+      } catch {
+        /* ignore */
+      }
     }
-    const els = drag.sourceEls || drag.pending?.sourceEls;
-    if (drag.ghost?.el) drag.ghost.el.remove();
-    removeAllDragGhosts();
-    els?.forEach((el) => {
-      if (el && el.isConnected) el.style.opacity = "";
-    });
     drag = null;
+    removeAllDragGhosts();
+    clearDragSourceMarks();
+    setBodyDragging(false);
   }
 
   function onGlobalPointerMove(e) {
@@ -357,9 +372,10 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
     inner.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       e.preventDefault();
+      window.getSelection()?.removeAllRanges?.();
       const rect = inner.getBoundingClientRect();
-      const offX = e.clientX - rect.left;
-      const offY = e.clientY - rect.top;
+      const offX = Math.round(e.clientX - rect.left);
+      const offY = Math.round(e.clientY - rect.top);
       const els = sourceElsGetter();
       drag = {
         pending: { src, offX, offY, x: e.clientX, y: e.clientY, sourceEls: els },

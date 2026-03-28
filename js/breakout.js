@@ -93,10 +93,13 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
       }
 
       if (ringCells.length > 0) {
-        const gapI = Math.floor(Math.random() * ringCells.length);
-        for (let i = 0; i < ringCells.length; i++) {
-          if (i === gapI) continue;
-          const [r, c] = ringCells[i];
+        // 缺口只开在围墙「朝下」的一边（面向挡板、空场），避免朝画布上/左/右边开口时球贴墙弹不进来
+        const gapCandidates = ringCells.filter(([r]) => r === ringBot);
+        const use = gapCandidates.length > 0 ? gapCandidates : ringCells;
+        const gapPick = use[Math.floor(Math.random() * use.length)];
+        const gapKey = cellKey(gapPick[0], gapPick[1]);
+        for (const [r, c] of ringCells) {
+          if (cellKey(r, c) === gapKey) continue;
           const k = cellKey(r, c);
           if (occupied.has(k)) continue;
           addBrickAt(list, r, c, true, 215);
