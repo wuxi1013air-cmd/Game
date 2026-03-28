@@ -14,7 +14,9 @@ const GRAVITY = 2200;
 const JUMP_V = -620;
 const SLIDE_MIN_MS = 420;
 /** 越大趴下/起身越快 */
-const SLIDE_ANIM_SPEED = 28;
+const SLIDE_ANIM_SPEED = 52;
+/** 离地后仍可起跳的宽限（秒） */
+const COYOTE_TIME = 0.11;
 /** 低于此视为「起身」，高墙洞内与实体重叠则判输 */
 const WALL_CROUCH_MORPH = 0.88;
 /** 顶高墙时向左推（px/s） */
@@ -23,7 +25,7 @@ const WALL_PUSH_SPEED = 260;
 const SHIFT_RECOVER_SPEED = 520;
 const DEATH_LEFT_X = 14;
 
-export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive }) {
+export function createRunner(canvas, { onScore, onGameOver, getBestEl }) {
   const ctx = canvas.getContext("2d");
   const W = canvas.width;
   const H = canvas.height;
@@ -55,6 +57,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
   let playerShiftX = 0;
   /** 连续帧：身在墙柱范围内、贴地、头顶未挡、保持趴低（洞下滑行） */
   let wallScrapeFrames = 0;
+  let coyoteRemain = 0;
 
   function syncBest() {
     if (getBestEl) getBestEl.textContent = String(best);
@@ -237,6 +240,14 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     }
 
     if (lethalCollides()) die();
+
+    const hf = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
+    const feetY = py + hf;
+    if (feetY >= GROUND_Y - 2 && vy >= -100) {
+      coyoteRemain = COYOTE_TIME;
+    } else {
+      coyoteRemain = Math.max(0, coyoteRemain - t);
+    }
   }
 
   function drawObstacle(obs) {
@@ -353,22 +364,27 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     raf = requestAnimationFrame(loop);
   }
 
-  function jump() {
+  function canStandOnGround() {
+    const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
+    const feet = py + h;
+    return feet >= GROUND_Y - 14 && feet <= GROUND_Y + 8 && vy >= -240;
+  }
+
+  function tryJump() {
     if (!running) return;
     if (sliding) {
       sliding = false;
       slideKeyHeld = false;
     }
-    const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
-    const onGround = Math.abs(py + h - GROUND_Y) < 5 && vy >= -120;
-    if (onGround) vy = JUMP_V;
+    if (canStandOnGround() || coyoteRemain > 0) {
+      vy = JUMP_V;
+      coyoteRemain = 0;
+    }
   }
 
   function slideStart() {
     if (!running) return;
-    const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
-    const onGround = Math.abs(py + h - GROUND_Y) < 5 && vy >= -120;
-    if (!onGround) return;
+    if (!canStandOnGround() && coyoteRemain <= 0) return;
     sliding = true;
     slideUntil = performance.now() + SLIDE_MIN_MS;
     vy = 0;
@@ -390,6 +406,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     sliding = false;
     slideKeyHeld = false;
     wallScrapeFrames = 0;
+    coyoteRemain = 0;
     playerShiftX = 0;
     vy = 0;
     py = GROUND_Y - RUN_H;
@@ -411,52 +428,23 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     raf = 0;
   }
 
-  function bindInput() {
-    const active = () => typeof isActive === "function" && isActive();
-
-    const onKeyDown = (e) => {
-      if (!active() || !running) return;
-      if (e.code === "ArrowUp") {
-        if (e.repeat) return;
-        e.preventDefault();
-        e.stopPropagation();
-        jump();
-        return;
-      }
-      if (e.code === "ArrowDown") {
-        e.preventDefault();
-        e.stopPropagation();
-        slideKeyHeld = true;
-        slideStart();
-      }
-    };
-    const onKeyUp = (e) => {
-      if (!active()) return;
-      if (e.code === "ArrowDown") {
-        e.preventDefault();
-        slideKeyHeld = false;
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown, true);
-    window.addEventListener("keyup", onKeyUp, true);
-
-    return () => {
-      window.removeEventListener("keydown", onKeyDown, true);
-      window.removeEventListener("keyup", onKeyUp, true);
-    };
+  function setSlideKeyHeld(down) {
+    if (!running) return;
+    slideKeyHeld = down;
+    if (down) slideStart();
   }
 
-  const unbind = bindInput();
   reset();
 
   return {
     reset,
     start,
     stop,
+    tryJump,
+    setSlideKeyHeld,
+    isRunning: () => running,
     destroy() {
       stop();
-      unbind();
     },
   };
 }

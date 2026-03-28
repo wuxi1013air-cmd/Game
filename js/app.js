@@ -134,7 +134,6 @@ function showRunnerLoseBar() {
 }
 
 const runnerApi = createRunner(runnerCanvas, {
-  isActive: () => views.runner.classList.contains("active"),
   onScore: (n) => {
     runnerScoreEl.textContent = String(n);
   },
@@ -144,11 +143,45 @@ const runnerApi = createRunner(runnerCanvas, {
   getBestEl: runnerBestEl,
 });
 
+const arrowUpKey = (e) => e.code === "ArrowUp" || e.key === "ArrowUp";
+const arrowDownKey = (e) => e.code === "ArrowDown" || e.key === "ArrowDown";
+
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (!views.runner.classList.contains("active")) return;
+    if (!runnerApi.isRunning()) return;
+    if (arrowUpKey(e)) {
+      if (e.repeat) return;
+      e.preventDefault();
+      runnerApi.tryJump();
+      return;
+    }
+    if (arrowDownKey(e)) {
+      e.preventDefault();
+      runnerApi.setSlideKeyHeld(true);
+    }
+  },
+  true,
+);
+
+window.addEventListener(
+  "keyup",
+  (e) => {
+    if (!views.runner.classList.contains("active")) return;
+    if (!arrowDownKey(e)) return;
+    e.preventDefault();
+    runnerApi.setSlideKeyHeld(false);
+  },
+  true,
+);
+
 function runnerBeginPlay() {
   hideOverlay();
   hideRunnerLoseBar();
   runnerApi.reset();
   runnerApi.start();
+  runnerCanvas.focus({ preventScroll: true });
 }
 
 document.getElementById("runner-restart").addEventListener("click", () => {
@@ -388,6 +421,7 @@ document.querySelectorAll(".game-card").forEach((card) => {
       hideRunnerLoseBar();
       runnerApi.reset();
       runnerApi.start();
+      runnerCanvas.focus({ preventScroll: true });
     } else if (game === "minesweeper") {
       hideMsWinBar();
       hideMsLoseBar();
