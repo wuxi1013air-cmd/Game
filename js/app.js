@@ -1,13 +1,11 @@
 import { createSnakeGame } from "./snake.js";
 import { createMinesweeper } from "./minesweeper.js";
-import { createPinball } from "./pinball.js";
 import { createSolitaire } from "./solitaire.js";
 
 const views = {
   home: document.getElementById("view-home"),
   snake: document.getElementById("view-snake"),
   minesweeper: document.getElementById("view-minesweeper"),
-  pinball: document.getElementById("view-pinball"),
   solitaire: document.getElementById("view-solitaire"),
 };
 
@@ -40,7 +38,6 @@ document.querySelectorAll("[data-back]").forEach((btn) => {
   btn.addEventListener("click", () => {
     hideOverlay();
     snakeApi.stop();
-    pinballApi.stop();
     showView("home");
   });
 });
@@ -80,30 +77,11 @@ const keyMap = {
 };
 
 window.addEventListener("keydown", (e) => {
-  if (views.snake.classList.contains("active")) {
-    const m = keyMap[e.key];
-    if (m) {
-      e.preventDefault();
-      snakeApi.setDirection(m[0], m[1]);
-    }
-    return;
-  }
-  if (views.pinball.classList.contains("active")) {
-    if (e.key === "z" || e.key === "Z" || e.key === "ArrowLeft") {
-      e.preventDefault();
-      pinballApi.setLeft(true);
-    }
-    if (e.key === "m" || e.key === "M" || e.key === "ArrowRight") {
-      e.preventDefault();
-      pinballApi.setRight(true);
-    }
-  }
-});
-
-window.addEventListener("keyup", (e) => {
-  if (!views.pinball.classList.contains("active")) return;
-  if (e.key === "z" || e.key === "Z" || e.key === "ArrowLeft") pinballApi.setLeft(false);
-  if (e.key === "m" || e.key === "M" || e.key === "ArrowRight") pinballApi.setRight(false);
+  if (!views.snake.classList.contains("active")) return;
+  const m = keyMap[e.key];
+  if (!m) return;
+  e.preventDefault();
+  snakeApi.setDirection(m[0], m[1]);
 });
 
 const msRemaining = document.getElementById("ms-remaining");
@@ -131,29 +109,20 @@ msDifficulty.addEventListener("change", () => {
   minesApi.setDifficulty(msDifficulty.value);
 });
 
-const pbScore = document.getElementById("pb-score");
-const pbBalls = document.getElementById("pb-balls");
-
-const pinballApi = createPinball(document.getElementById("pinball-canvas"), {
-  onScore: (n) => {
-    pbScore.textContent = String(n);
-  },
-  onBalls: (n) => {
-    pbBalls.textContent = String(n);
-  },
-  onGameOver: (final) => {
-    showOverlay("弹珠用尽", `本局得分 ${final}。点「重来」再玩。`);
-  },
-});
-
-document.getElementById("pb-restart").addEventListener("click", () => {
-  hideOverlay();
-  pinballApi.reset();
-  pinballApi.start();
-});
+const solScoreEl = document.getElementById("sol-score");
+const solMovesEl = document.getElementById("sol-moves");
+const solBestEl = document.getElementById("sol-best");
 
 const solitaireApi = createSolitaire(document.getElementById("sol-root"), {
-  onWin: () => showOverlay("胜利", "四花色都已接到 K！"),
+  onWin: (finalScore) => {
+    const best = Number(localStorage.getItem("mini-arcade-solitaire-best")) || 0;
+    showOverlay("胜利", `本局得分 ${finalScore} 分。历史最佳 ${best} 分（已写入本机）。`);
+  },
+  onScore: ({ score, moves, best }) => {
+    solScoreEl.textContent = String(score);
+    solMovesEl.textContent = String(moves);
+    solBestEl.textContent = String(best);
+  },
 });
 
 document.getElementById("sol-restart").addEventListener("click", () => {
@@ -172,10 +141,6 @@ document.querySelectorAll(".game-card").forEach((card) => {
     } else if (game === "minesweeper") {
       showView("minesweeper");
       minesApi.setDifficulty(msDifficulty.value);
-    } else if (game === "pinball") {
-      showView("pinball");
-      pinballApi.reset();
-      pinballApi.start();
     } else if (game === "solitaire") {
       showView("solitaire");
       solitaireApi.reset();

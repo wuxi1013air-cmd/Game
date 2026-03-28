@@ -145,9 +145,9 @@ main {
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 780px) {
   .game-cards {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
@@ -388,23 +388,14 @@ main {
   color: #1f0000;
 }
 
-.pinball-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-#pinball-canvas {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
+.sol-stats {
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .solitaire {
+  --sol-w: 3.65rem;
+  --sol-h: 5.15rem;
   width: 100%;
 }
 
@@ -414,118 +405,220 @@ main {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .sol-stock-waste {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.55rem;
   align-items: flex-start;
+}
+
+.sol-waste-card {
+  width: var(--sol-w);
 }
 
 .sol-foundations {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.4rem;
   flex-wrap: wrap;
 }
 
 .sol-pile {
-  width: 3rem;
-  height: 4.2rem;
-  border-radius: 6px;
-  border: 1px dashed var(--border);
+  width: var(--sol-w);
+  height: var(--sol-h);
+  border-radius: 8px;
+  border: 1px dashed rgba(110, 231, 183, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(20, 24, 36, 0.6);
+  background: rgba(12, 14, 20, 0.65);
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .sol-pile.sol-stock {
   cursor: pointer;
   border-style: solid;
-  background: linear-gradient(145deg, #1e3a2f, #0f172a);
+  border-color: var(--border);
+  background: linear-gradient(160deg, #1a3d2e 0%, #0c1812 100%);
 }
 
 .sol-pile.sol-stock.has-cards::after {
-  content: "🂠";
-  font-size: 1.4rem;
-  opacity: 0.5;
+  content: "";
+  width: 70%;
+  height: 78%;
+  border-radius: 4px;
+  border: 2px solid rgba(110, 231, 183, 0.25);
+  background: repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 3px,
+    rgba(110, 231, 183, 0.08) 3px,
+    rgba(110, 231, 183, 0.08) 6px
+  );
 }
 
 .sol-pile.sol-waste {
   border-style: solid;
+  border-color: var(--border);
 }
 
 .sol-foundation {
-  cursor: pointer;
+  cursor: default;
+}
+
+.sol-foundation:hover {
+  border-color: rgba(110, 231, 183, 0.55);
+  box-shadow: 0 0 0 1px rgba(110, 231, 183, 0.15);
 }
 
 .sol-tableau {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.25rem;
+  gap: 0.2rem;
   align-items: start;
 }
 
 .sol-column {
-  min-height: 5rem;
-  border-radius: 6px;
-  padding: 0.15rem;
+  min-height: 5.5rem;
+  border-radius: 8px;
+  padding: 0.1rem;
 }
 
 .sol-card-wrap {
   position: relative;
+  touch-action: none;
 }
 
-.sol-card {
-  width: 100%;
-  max-width: 3rem;
-  height: 4.2rem;
+.sol-card-shell {
+  width: var(--sol-w);
+  height: var(--sol-h);
   margin: 0 auto;
-  border-radius: 6px;
-  border: 1px solid var(--border);
+  position: relative;
+  touch-action: none;
+}
+
+.sol-card.sol-card--poker {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  border: 1px solid #1e293b;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 4px 12px rgba(0, 0, 0, 0.35);
+  background: linear-gradient(165deg, #fffefb 0%, #f1f0ea 45%, #e8e6de 100%);
+  position: relative;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  cursor: grab;
+}
+
+.sol-card.sol-card--poker:active {
+  cursor: grabbing;
+}
+
+.sol-card.sol-card--poker.red {
+  color: #c41e3a;
+}
+
+.sol-card.sol-card--poker.black {
+  color: #0f172a;
+}
+
+.sol-poker-corner {
+  position: absolute;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  font-weight: 700;
-  line-height: 1.1;
-  cursor: pointer;
-  user-select: none;
-  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
-  color: #0f172a;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-}
-
-.sol-card.red {
-  color: #b91c1c;
-}
-
-.sol-card.black {
-  color: #0f172a;
-}
-
-.sol-card.face-down {
-  background: linear-gradient(145deg, #1d4ed8, #1e3a8a);
-  cursor: pointer;
-}
-
-.sol-card.face-down::after {
-  content: "✦";
-  font-size: 1rem;
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.sol-card.selected {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.sol-suit {
-  font-size: 1.1rem;
   line-height: 1;
+  font-size: 0.58rem;
+  gap: 0.05rem;
+}
+
+.sol-poker-tl {
+  top: 0.28rem;
+  left: 0.32rem;
+}
+
+.sol-poker-br {
+  bottom: 0.28rem;
+  right: 0.32rem;
+  transform: rotate(180deg);
+}
+
+.sol-poker-suit {
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.sol-poker-mid {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.85rem;
+  opacity: 0.22;
+  line-height: 1;
+}
+
+.sol-card.sol-card--back {
+  cursor: pointer;
+  background:
+    linear-gradient(135deg, #1e40af 0%, #172554 50%, #1d4ed8 100%);
+  border-color: #1e3a8a;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.sol-card.sol-card--back::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 5px,
+      rgba(255, 255, 255, 0.06) 5px,
+      rgba(255, 255, 255, 0.06) 6px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 5px,
+      rgba(255, 255, 255, 0.06) 5px,
+      rgba(255, 255, 255, 0.06) 6px
+    );
+}
+
+.sol-card.sol-card--back::after {
+  content: "♠";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.15rem;
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.sol-drag-ghost {
+  position: fixed;
+  z-index: 10000;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.45));
+}
+
+.sol-drag-layer {
+  position: absolute;
+  left: 0;
+  width: var(--sol-w);
+  height: var(--sol-h);
 }
 
 .site-footer {

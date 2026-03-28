@@ -19,7 +19,7 @@
       <span class="logo-icon">◆</span>
       <span>Mini Arcade</span>
     </div>
-    <p class="tagline">扫雷 · 弹珠台 · 纸牌 · 贪吃蛇 · 纯前端 GitHub Pages</p>
+    <p class="tagline">扫雷 · 纸牌 · 贪吃蛇 · 纯前端 GitHub Pages</p>
   </header>
 
   <main>
@@ -31,15 +31,10 @@
           <span class="card-name">扫雷</span>
           <span class="card-desc">左键翻开，右键标记；Shift+左键也可标记</span>
         </button>
-        <button type="button" class="game-card" data-game="pinball">
-          <span class="card-emoji">🔮</span>
-          <span class="card-name">三维弹珠</span>
-          <span class="card-desc">Z / ← 左挡，M / → 右挡，撞缓冲器得分</span>
-        </button>
         <button type="button" class="game-card" data-game="solitaire">
           <span class="card-emoji">🃏</span>
           <span class="card-name">纸牌</span>
-          <span class="card-desc">克朗代克接龙：双击可试收上排</span>
+          <span class="card-desc">扑克接龙：拖拽叠放，双击快速收牌</span>
         </button>
         <button type="button" class="game-card" data-game="snake">
           <span class="card-emoji">🐍</span>
@@ -71,30 +66,18 @@
       <p class="hint">左键点已翻开的数字：若周围旗数等于该数字，会翻开其余相邻格</p>
     </section>
 
-    <section id="view-pinball" class="view">
-      <div class="game-toolbar">
-        <button type="button" class="btn ghost" data-back>← 返回</button>
-        <div class="stats">
-          <span>分数 <strong id="pb-score">0</strong></span>
-          <span>球 <strong id="pb-balls">3</strong></span>
-        </div>
-        <button type="button" class="btn" id="pb-restart">重来</button>
-      </div>
-      <div class="pinball-wrap">
-        <canvas id="pinball-canvas" width="380" height="520" aria-label="弹珠台"></canvas>
-        <p class="hint">立体风格桌面 · Z / ← 左挡板 · M / → 右挡板</p>
-      </div>
-    </section>
-
     <section id="view-solitaire" class="view view-wide">
       <div class="game-toolbar">
         <button type="button" class="btn ghost" data-back>← 返回</button>
-        <div class="stats">
-          <span>纸牌接龙</span>
+        <div class="stats sol-stats">
+          <span>得分 <strong id="sol-score">0</strong></span>
+          <span>步数 <strong id="sol-moves">0</strong></span>
+          <span>最佳 <strong id="sol-best">0</strong></span>
         </div>
         <button type="button" class="btn" id="sol-restart">洗牌重开</button>
       </div>
       <div id="sol-root"></div>
+      <p class="hint">计分：收到右上角 +10；翻开压牌 +5；废牌移到列 +5；列间移整叠 +3；废牌收库一圈 −20。双击单张可尝试收到对应花色堆。</p>
     </section>
 
     <section id="view-snake" class="view">

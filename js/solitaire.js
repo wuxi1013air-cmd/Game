@@ -1,6 +1,15 @@
 const SUITS = ["♠", "♥", "♦", "♣"];
 const RANKS = ["", "A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 
+const SCORE_FOUNDATION = 10;
+const SCORE_FLIP = 5;
+const SCORE_WASTE_TO_TABLEAU = 5;
+const SCORE_TABLEAU_MOVE = 3;
+const SCORE_RECYCLE = -20;
+const DRAG_THRESHOLD = 6;
+const STACK_GAP = 28;
+const BEST_KEY = "mini-arcade-solitaire-best";
+
 function isRed(suit) {
   return suit === 1 || suit === 2;
 }
@@ -33,73 +42,36 @@ function validRun(cards) {
   return true;
 }
 
-export function createSolitaire(rootEl, { onWin }) {
+function bestEver() {
+  return Number(localStorage.getItem(BEST_KEY)) || 0;
+}
+
+function saveBest(n) {
+  localStorage.setItem(BEST_KEY, String(n));
+}
+
+export function createSolitaire(rootEl, { onWin, onScore }) {
   let stock = [];
   let waste = [];
   let foundations = [[], [], [], []];
   let tableau = [[], [], [], [], [], [], []];
-  let selected = null;
+  let score = 0;
+  let moves = 0;
 
-  function tryAutoFoundation() {
-    if (!selected || selected.cards.length !== 1) {
-      clearSel();
-      return;
-    }
-    const c = selected.cards[0];
-    const fi = c.suit;
-    const f = foundations[fi];
-    const top = f.length ? f[f.length - 1] : null;
-    if (!top && c.rank === 1) {
-      moveToFoundation(fi);
-      return;
-    }
-    if (top && top.rank === c.rank - 1 && top.suit === c.suit) {
-      moveToFoundation(fi);
-      return;
-    }
-    clearSel();
+  let drag = null;
+
+  function emit() {
+    onScore?.({ score, moves, best: bestEver() });
   }
 
-  function moveToFoundation(fi) {
-    if (!selected || selected.cards.length !== 1) return;
-    const c = selected.cards[0];
-    const f = foundations[fi];
-    const top = f.length ? f[f.length - 1] : null;
-    if (!top && c.rank !== 1) return;
-    if (top && (top.rank !== c.rank - 1 || top.suit !== c.suit)) return;
-    removeFromSource();
-    f.push({ ...c, faceUp: true });
-    clearSel();
-    afterMove();
+  function addPoints(delta) {
+    score += delta;
+    emit();
   }
 
-  function removeFromSource() {
-    if (!selected) return;
-    if (selected.from === "waste") {
-      waste.pop();
-    } else if (selected.from === "tableau") {
-      const col = tableau[selected.col];
-      col.splice(selected.start, selected.cards.length);
-      const last = col[col.length - 1];
-      if (last && !last.faceUp) last.faceUp = true;
-    }
-  }
-
-  function clearSel() {
-    selected = null;
-  }
-
-  function checkWin() {
-    let n = 0;
-    foundations.forEach((f) => {
-      n += f.length;
-    });
-    if (n === 52) onWin();
-  }
-
-  function afterMove() {
-    checkWin();
-    render();
+  function bumpMoves() {
+    moves += 1;
+    emit();
   }
 
   function canPlaceOnTableau(col, cards) {
@@ -112,13 +84,277 @@ export function createSolitaire(rootEl, { onWin }) {
     return t.rank === bottom.rank + 1;
   }
 
+  function canPlaceOnFoundation(fi, card) {
+    if (fi !== card.suit) return false;
+    const f = foundations[fi];
+    const top = f.length ? f[f.length - 1] : null;
+    if (!top) return card.rank === 1;
+    return top.rank === card.rank - 1;
+  }
+
+  function removeSource(src) {
+    if (src.from === "waste") {
+      waste.pop();
+    } else {
+      const col = tableau[src.col];
+      col.splice(src.start, src.cards.length);
+      const last = col[col.length - 1];
+      if (last && !last.faceUp) {
+        last.faceUp = true;
+        addPoints(SCORE_FLIP);
+      }
+    }
+  }
+
+  function applyToFoundation(fi, src) {
+    if (src.cards.length !== 1) return false;
+    const c = src.cards[0];
+    if (!canPlaceOnFoundation(fi, c)) return false;
+    removeSource(src);
+    foundations[fi].push({ ...c, faceUp: true });
+    addPoints(SCORE_FOUNDATION);
+    bumpMoves();
+    checkWin();
+    render();
+    return true;
+  }
+
+  function applyToTableau(col, src) {
+    if (!canPlaceOnTableau(col, src.cards)) return false;
+    if (src.from === "tableau" && src.col === col) return false;
+    const fromWaste = src.from === "waste";
+    removeSource(src);
+    tableau[col].push(...src.cards.map((c) => ({ ...c, faceUp: true })));
+    if (fromWaste) addPoints(SCORE_WASTE_TO_TABLEAU);
+    else addPoints(SCORE_TABLEAU_MOVE);
+    bumpMoves();
+    checkWin();
+    render();
+    return true;
+  }
+
+  let gameWon = false;
+
+  function checkWin() {
+    if (gameWon) return;
+    let n = 0;
+    foundations.forEach((f) => {
+      n += f.length;
+    });
+    if (n === 52) {
+      gameWon = true;
+      const b = bestEver();
+      if (score > b) saveBest(score);
+      emit();
+      onWin?.(score);
+    }
+  }
+
+  function clickStock() {
+    if (drag) return;
+    if (stock.length > 0) {
+      const c = stock.pop();
+      c.faceUp = true;
+      waste.push(c);
+      bumpMoves();
+    } else if (waste.length) {
+      addPoints(SCORE_RECYCLE);
+      for (let i = waste.length - 1; i >= 0; i--) {
+        const c = waste[i];
+        c.faceUp = false;
+        stock.push(c);
+      }
+      waste = [];
+      bumpMoves();
+    }
+    render();
+  }
+
+  function clickFlipLast(col, index) {
+    const pile = tableau[col];
+    const card = pile[index];
+    if (!card.faceUp && index === pile.length - 1) {
+      card.faceUp = true;
+      addPoints(SCORE_FLIP);
+      bumpMoves();
+      render();
+    }
+  }
+
+  function tryDoubleToFoundation(fromWaste, col, idx) {
+    let card = null;
+    if (fromWaste) {
+      if (!waste.length) return;
+      card = waste[waste.length - 1];
+    } else {
+      const pile = tableau[col];
+      const run = pile.slice(idx);
+      if (!validRun(run) || run.length !== 1) return;
+      card = run[0];
+    }
+    const fi = card.suit;
+    if (!canPlaceOnFoundation(fi, card)) return;
+    const src = fromWaste
+      ? { from: "waste", cards: [card] }
+      : { from: "tableau", col, start: idx, cards: [card] };
+    if (!applyToFoundation(fi, src)) render();
+  }
+
+  function buildCardFaceHTML(c) {
+    const r = RANKS[c.rank];
+    const s = SUITS[c.suit];
+    const cls = isRed(c.suit) ? "red" : "black";
+    return `<div class="sol-card sol-card--poker ${cls}">
+      <span class="sol-poker-corner sol-poker-tl">${r}<span class="sol-poker-suit">${s}</span></span>
+      <span class="sol-poker-mid">${s}</span>
+      <span class="sol-poker-corner sol-poker-br">${r}<span class="sol-poker-suit">${s}</span></span>
+    </div>`;
+  }
+
+  function cardEl(c) {
+    const wrap = document.createElement("div");
+    wrap.className = "sol-card-shell";
+    if (!c.faceUp) {
+      wrap.innerHTML = '<div class="sol-card sol-card--poker sol-card--back" aria-hidden="true"></div>';
+    } else {
+      wrap.innerHTML = buildCardFaceHTML(c);
+    }
+    return wrap;
+  }
+
+  function makeDragGhost(cards, clientX, clientY, offX, offY) {
+    const g = document.createElement("div");
+    g.className = "sol-drag-ghost";
+    g.style.pointerEvents = "none";
+    cards.forEach((c, i) => {
+      const shell = document.createElement("div");
+      shell.className = "sol-drag-layer";
+      shell.style.top = `${i * STACK_GAP}px`;
+      shell.innerHTML = c.faceUp ? buildCardFaceHTML(c) : '<div class="sol-card sol-card--poker sol-card--back"></div>';
+      g.append(shell);
+    });
+    document.body.append(g);
+    const move = (x, y) => {
+      g.style.left = `${x - offX}px`;
+      g.style.top = `${y - offY}px`;
+    };
+    move(clientX, clientY);
+    return { el: g, move };
+  }
+
+  function findDropTarget(x, y) {
+    const stack = document.elementsFromPoint(x, y);
+    for (const el of stack) {
+      const t = el.closest?.("[data-sol-drop]");
+      if (t) return t.getAttribute("data-sol-drop");
+    }
+    return null;
+  }
+
+  function startDrag(src, clientX, clientY, offX, offY, sourceEls) {
+    drag = {
+      src,
+      ghost: makeDragGhost(src.cards, clientX, clientY, offX, offY),
+      sourceEls,
+    };
+    sourceEls.forEach((el) => {
+      el.style.opacity = "0.3";
+    });
+  }
+
+  function endDrag() {
+    if (!drag) return;
+    if (drag.ghost?.el) drag.ghost.el.remove();
+    const els = drag.sourceEls || drag.pending?.sourceEls;
+    els?.forEach((el) => {
+      el.style.opacity = "";
+    });
+    drag = null;
+  }
+
+  function onGlobalPointerMove(e) {
+    if (!drag) return;
+    if (drag.pending) {
+      const dx = e.clientX - drag.pending.x;
+      const dy = e.clientY - drag.pending.y;
+      if (Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
+        const p = drag.pending;
+        drag.pending = null;
+        startDrag(p.src, e.clientX, e.clientY, p.offX, p.offY, p.sourceEls);
+        drag.ghost.move(e.clientX, e.clientY);
+      }
+      return;
+    }
+    drag.ghost.move(e.clientX, e.clientY);
+  }
+
+  function onGlobalPointerUp(e) {
+    if (!drag) return;
+    if (drag.pending) {
+      endDrag();
+      return;
+    }
+    const drop = findDropTarget(e.clientX, e.clientY);
+    const src = drag.src;
+    endDrag();
+    if (!drop) {
+      render();
+      return;
+    }
+    if (drop.startsWith("F")) {
+      const fi = Number(drop.slice(1));
+      if (!Number.isNaN(fi) && applyToFoundation(fi, src)) return;
+      render();
+      return;
+    }
+    if (drop.startsWith("T")) {
+      const col = Number(drop.slice(1));
+      if (!Number.isNaN(col) && applyToTableau(col, src)) return;
+      render();
+      return;
+    }
+    render();
+  }
+
+  function bindDrag(cardWrap, src, sourceElsGetter) {
+    const inner = cardWrap.querySelector(".sol-card-shell") || cardWrap;
+    inner.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const rect = inner.getBoundingClientRect();
+      const offX = e.clientX - rect.left;
+      const offY = e.clientY - rect.top;
+      const els = sourceElsGetter();
+      drag = {
+        pending: { src, offX, offY, x: e.clientX, y: e.clientY, sourceEls: els },
+        ghost: null,
+        sourceEls: null,
+      };
+      inner.setPointerCapture(e.pointerId);
+      const capMove = (ev) => onGlobalPointerMove(ev);
+      const capUp = (ev) => {
+        inner.releasePointerCapture(ev.pointerId);
+        inner.removeEventListener("pointermove", capMove);
+        inner.removeEventListener("pointerup", capUp);
+        inner.removeEventListener("pointercancel", capUp);
+        onGlobalPointerUp(ev);
+      };
+      inner.addEventListener("pointermove", capMove);
+      inner.addEventListener("pointerup", capUp);
+      inner.addEventListener("pointercancel", capUp);
+    });
+  }
+
   function deal() {
+    endDrag();
+    gameWon = false;
     const deck = shuffle(newDeck());
     stock = deck;
     waste = [];
     foundations = [[], [], [], []];
     tableau = [[], [], [], [], [], [], []];
-    selected = null;
+    score = 0;
+    moves = 0;
     for (let c = 0; c < 7; c++) {
       for (let r = 0; r <= c; r++) {
         const card = stock.pop();
@@ -126,119 +362,12 @@ export function createSolitaire(rootEl, { onWin }) {
         tableau[c].push(card);
       }
     }
+    emit();
     render();
-  }
-
-  function clickStock() {
-    clearSel();
-    if (stock.length > 0) {
-      const c = stock.pop();
-      c.faceUp = true;
-      waste.push(c);
-    } else if (waste.length) {
-      for (let i = waste.length - 1; i >= 0; i--) {
-        const c = waste[i];
-        c.faceUp = false;
-        stock.push(c);
-      }
-      waste = [];
-    }
-    render();
-  }
-
-  function clickWaste() {
-    if (waste.length === 0) return;
-    const top = waste[waste.length - 1];
-    if (selected?.from === "waste") {
-      clearSel();
-      render();
-      return;
-    }
-    selected = { from: "waste", cards: [top] };
-    render();
-  }
-
-  function clickFoundation(fi) {
-    if (!selected) return;
-    if (selected.cards.length !== 1) {
-      clearSel();
-      render();
-      return;
-    }
-    moveToFoundation(fi);
-    render();
-  }
-
-  function clickTableau(col, index) {
-    const pile = tableau[col];
-    const card = pile[index];
-
-    if (selected?.from === "waste" && selected.cards.length === 1) {
-      if (canPlaceOnTableau(col, selected.cards)) {
-        removeFromSource();
-        tableau[col].push({ ...selected.cards[0], faceUp: true });
-        clearSel();
-        afterMove();
-        return;
-      }
-    }
-
-    if (!card.faceUp) {
-      if (index === pile.length - 1 && !card.faceUp) {
-        card.faceUp = true;
-        clearSel();
-        render();
-      }
-      return;
-    }
-    const run = pile.slice(index);
-    if (!validRun(run)) return;
-
-    if (selected) {
-      if (selected.from === "tableau" && selected.col === col && selected.start === index) {
-        clearSel();
-        render();
-        return;
-      }
-      if (canPlaceOnTableau(col, selected.cards) && !(selected.from === "tableau" && selected.col === col)) {
-        const src = selected;
-        removeFromSource();
-        tableau[col].push(...src.cards.map((c) => ({ ...c, faceUp: true })));
-        clearSel();
-        afterMove();
-        return;
-      }
-      if (selected.from === "tableau" && selected.col === col) {
-        selected = { from: "tableau", col, start: index, cards: run };
-        render();
-        return;
-      }
-    }
-
-    selected = { from: "tableau", col, start: index, cards: run };
-    render();
-  }
-
-  function dblFoundationFromTableauOrWaste() {
-    tryAutoFoundation();
-    render();
-  }
-
-  function cardEl(c, opts) {
-    const el = document.createElement("div");
-    el.className = "sol-card";
-    if (!c.faceUp) {
-      el.classList.add("face-down");
-      el.textContent = "";
-    } else {
-      el.classList.add(isRed(c.suit) ? "red" : "black");
-      el.innerHTML = `<span class="sol-rank">${RANKS[c.rank]}</span><span class="sol-suit">${SUITS[c.suit]}</span>`;
-    }
-    if (opts?.selected) el.classList.add("selected");
-    return el;
   }
 
   function render() {
+    endDrag();
     rootEl.innerHTML = "";
     rootEl.className = "solitaire";
 
@@ -259,17 +388,17 @@ export function createSolitaire(rootEl, { onWin }) {
     wastePile.className = "sol-pile sol-waste";
     if (waste.length) {
       const wtop = waste[waste.length - 1];
-      const sel = selected?.from === "waste";
-      const wc = cardEl(wtop, { selected: sel });
-      wc.addEventListener("click", (e) => {
-        if (e.detail >= 2) return;
-        clickWaste();
-      });
-      wc.addEventListener("dblclick", (e) => {
-        e.preventDefault();
-        selected = { from: "waste", cards: [wtop] };
-        dblFoundationFromTableauOrWaste();
-      });
+      const wc = document.createElement("div");
+      wc.className = "sol-waste-card";
+      const wShell = cardEl(wtop);
+      wc.append(wShell);
+      if (wtop.faceUp) {
+        bindDrag(wc, { from: "waste", cards: [wtop] }, () => [wc.querySelector(".sol-card-shell")]);
+        wShell.addEventListener("dblclick", (e) => {
+          e.preventDefault();
+          tryDoubleToFoundation(true);
+        });
+      }
       wastePile.append(wc);
     }
     sw.append(wastePile);
@@ -281,12 +410,12 @@ export function createSolitaire(rootEl, { onWin }) {
     for (let fi = 0; fi < 4; fi++) {
       const fp = document.createElement("div");
       fp.className = "sol-pile sol-foundation";
+      fp.dataset.solDrop = `F${fi}`;
       const f = foundations[fi];
       if (f.length) {
         const t = f[f.length - 1];
         fp.append(cardEl(t));
       }
-      fp.addEventListener("click", () => clickFoundation(fi));
       foundRow.append(fp);
     }
     topRow.append(foundRow);
@@ -297,42 +426,42 @@ export function createSolitaire(rootEl, { onWin }) {
     for (let c = 0; c < 7; c++) {
       const colEl = document.createElement("div");
       colEl.className = "sol-column";
+      colEl.dataset.solDrop = `T${c}`;
       const pile = tableau[c];
       pile.forEach((card, idx) => {
         const wrap = document.createElement("div");
         wrap.className = "sol-card-wrap";
-        wrap.style.marginTop = idx === 0 ? "0" : "-4.2rem";
-        const sel =
-          selected?.from === "tableau" && selected.col === c && idx >= selected.start;
-        const ce = cardEl(card, { selected: sel });
-        ce.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (e.detail >= 2) return;
-          clickTableau(c, idx);
-        });
-        ce.addEventListener("dblclick", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!card.faceUp) return;
+        wrap.style.marginTop = idx === 0 ? "0" : `-${STACK_GAP / 16}rem`;
+        const shell = cardEl(card);
+        wrap.append(shell);
+        if (!card.faceUp) {
+          shell.addEventListener("click", (e) => {
+            e.stopPropagation();
+            clickFlipLast(c, idx);
+          });
+        } else {
           const run = pile.slice(idx);
-          if (!validRun(run)) return;
-          selected = { from: "tableau", col: c, start: idx, cards: run };
-          dblFoundationFromTableauOrWaste();
-        });
-        wrap.append(ce);
-        colEl.append(wrap);
-      });
-      colEl.addEventListener("click", () => {
-        if (selected && selected.cards.length) {
-          if (canPlaceOnTableau(c, selected.cards)) {
-            if (selected.from === "tableau" && selected.col === c) return;
-            const src = selected;
-            removeFromSource();
-            tableau[c].push(...src.cards.map((x) => ({ ...x, faceUp: true })));
-            clearSel();
-            afterMove();
+          if (validRun(run)) {
+            bindDrag(
+              wrap,
+              { from: "tableau", col: c, start: idx, cards: run },
+              () => {
+                const colEl2 = tab.children[c];
+                const out = [];
+                for (let j = idx; j < pile.length; j++) {
+                  const w = colEl2.children[j];
+                  out.push(w.querySelector(".sol-card-shell"));
+                }
+                return out;
+              }
+            );
+            shell.addEventListener("dblclick", (e) => {
+              e.preventDefault();
+              if (run.length === 1) tryDoubleToFoundation(false, c, idx);
+            });
           }
         }
+        colEl.append(wrap);
       });
       tab.append(colEl);
     }
