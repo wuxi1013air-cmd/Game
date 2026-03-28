@@ -1,6 +1,6 @@
 /**
  * 横版跑酷：白方块主角，跳跃 + 滑铲（下蹲压缩）。
- * 障碍：地刺（须跳）、仙人掌（须跳）、低垂高墙（须滑铲通过）。
+ * 地刺 / 仙人掌：碰到即死。高墙：仅上部实体；顶墙会被向左推，推到左缘才死；滑铲通过后位姿快速回正。
  */
 
 const STORAGE_KEY = "mini-arcade-runner-best";
@@ -14,6 +14,11 @@ const GRAVITY = 2200;
 const JUMP_V = -620;
 const SLIDE_MIN_MS = 420;
 const SLIDE_ANIM_SPEED = 14;
+/** 顶高墙时向左推（px/s） */
+const WALL_PUSH_SPEED = 260;
+/** 脱离高墙后 playerShiftX 回正速率（px/s） */
+const SHIFT_RECOVER_SPEED = 520;
+const DEATH_LEFT_X = 14;
 
 export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive }) {
   const ctx = canvas.getContext("2d");
@@ -35,31 +40,43 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
 
   /** @type {{ type: 'spike' | 'cactus' | 'wall'; x: number }[]} */
   let obstacles = [];
-  /** 累计像素，归零时生成下一障碍 */
   let spawnWait = 280;
 
   let py = GROUND_Y - RUN_H;
   let vy = 0;
-  /** 0 = 站立奔跑外形，1 = 完全滑铲外形 */
   let slideMorph = 0;
   let sliding = false;
   let slideKeyHeld = false;
+  let slidePointerHeld = false;
   let slideUntil = 0;
+  /** 被墙向左推时的水平偏移（≤0） */
+  let playerShiftX = 0;
 
   function syncBest() {
     if (getBestEl) getBestEl.textContent = String(best);
   }
 
+  function playerCenterX() {
+    return PLAYER_ANCHOR_X + playerShiftX;
+  }
+
   function playerHitbox() {
     const w = RUN_W + (SLIDE_W - RUN_W) * slideMorph;
     const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
-    const x = PLAYER_ANCHOR_X - w / 2;
+    const x = playerCenterX() - w / 2;
     const y = GROUND_Y - h;
     return { x, y, w, h };
   }
 
   function aabbOverlap(a, b) {
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  /** 高墙仅上部为实体，底部留洞供滑铲 */
+  function wallSolidBox(obs) {
+    const bw = 44;
+    const bh = 52;
+    return { x: obs.x, y: GROUND_Y - 72, w: bw, h: bh };
   }
 
   function obstacleBox(obs) {
@@ -74,14 +91,22 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
         const h = 48;
         return { x: obs.x + 2, y: GROUND_Y - h, w, h };
       }
-      case "wall": {
-        const w = 44;
-        const h = 54;
-        return { x: obs.x, y: GROUND_Y - 72, w, h };
-      }
+      case "wall":
+        return wallSolidBox(obs);
       default:
         return { x: obs.x, y: GROUND_Y, w: 0, h: 0 };
     }
+  }
+
+  function wallVisualBox(obs) {
+    return { x: obs.x, y: GROUND_Y - 72, w: 44, h: 54 };
+  }
+
+  function wallSolidOverlapPlayer(p) {
+    for (const obs of obstacles) {
+      if (obs.type === "wall" && aabbOverlap(p, wallSolidBox(obs))) return true;
+    }
+    return false;
   }
 
   function rightmostObstacleEdge() {
@@ -123,9 +148,11 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     draw();
   }
 
-  function collides() {
+  /** 地刺、仙人掌：即死 */
+  function lethalCollides() {
     const p = playerHitbox();
     for (const obs of obstacles) {
+      if (obs.type === "wall") continue;
       if (aabbOverlap(p, obstacleBox(obs))) return true;
     }
     return false;
@@ -166,15 +193,24 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     trySpawn(move);
 
     const now = performance.now();
-    if (!slideKeyHeld && sliding && now >= slideUntil) sliding = false;
+    if (!slideKeyHeld && !slidePointerHeld && sliding && now >= slideUntil) sliding = false;
 
-    if (collides()) die();
+    if (wallSolidOverlapPlayer(playerHitbox())) {
+      playerShiftX -= WALL_PUSH_SPEED * t;
+      const pa = playerHitbox();
+      if (pa.x <= DEATH_LEFT_X) die();
+    } else if (playerShiftX < 0) {
+      const step = SHIFT_RECOVER_SPEED * t;
+      playerShiftX = Math.min(0, playerShiftX + step);
+    }
+
+    if (lethalCollides()) die();
   }
 
   function drawObstacle(obs) {
-    const b = obstacleBox(obs);
     ctx.save();
     if (obs.type === "spike") {
+      const b = obstacleBox(obs);
       ctx.fillStyle = "#64748b";
       ctx.strokeStyle = "#94a3b8";
       ctx.lineWidth = 1;
@@ -191,6 +227,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
         ctx.stroke();
       }
     } else if (obs.type === "cactus") {
+      const b = obstacleBox(obs);
       ctx.fillStyle = "#15803d";
       ctx.strokeStyle = "#166534";
       fillRoundRect(ctx, b.x + 6, b.y + 8, 12, b.h - 8, 4);
@@ -200,6 +237,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
       fillRoundRect(ctx, b.x + b.w - 8, b.y + 22, 8, 12, 3);
       fillRoundRect(ctx, b.x + 2, b.y + 6, 8, 8, 2);
     } else {
+      const b = wallVisualBox(obs);
       ctx.fillStyle = "#475569";
       ctx.strokeStyle = "#64748b";
       ctx.lineWidth = 2;
@@ -207,9 +245,6 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
       ctx.strokeRect(b.x, b.y, b.w, b.h);
       ctx.fillStyle = "rgba(15, 23, 42, 0.45)";
       ctx.fillRect(b.x + 4, b.y + 8, b.w - 8, 10);
-      ctx.fillStyle = "#fbbf24";
-      ctx.font = "10px JetBrains Mono, monospace";
-      ctx.fillText("↓铲", b.x + 8, b.y + 28);
     }
     ctx.restore();
   }
@@ -273,12 +308,6 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     for (const obs of obstacles) drawObstacle(obs);
 
     drawPlayer();
-
-    ctx.fillStyle = "rgba(248, 250, 252, 0.08)";
-    ctx.font = "600 14px JetBrains Mono, Noto Sans SC, sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(`速度 ${Math.round(gameSpeed)}`, W - 14, 24);
-    ctx.textAlign = "left";
   }
 
   function loop(now) {
@@ -297,19 +326,19 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     if (sliding) {
       sliding = false;
       slideKeyHeld = false;
+      slidePointerHeld = false;
     }
     const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
     const onGround = Math.abs(py + h - GROUND_Y) < 2 && vy >= -1;
     if (onGround) vy = JUMP_V;
   }
 
-  function slideStart(fromKey) {
+  function slideStart() {
     if (!running) return;
     const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
     const onGround = Math.abs(py + h - GROUND_Y) < 2 && vy >= -1;
     if (!onGround) return;
     sliding = true;
-    if (fromKey) slideKeyHeld = true;
     slideUntil = performance.now() + SLIDE_MIN_MS;
     vy = 0;
     const hh = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
@@ -318,6 +347,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
 
   function slideEnd() {
     slideKeyHeld = false;
+    slidePointerHeld = false;
   }
 
   function reset() {
@@ -333,6 +363,8 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     slideMorph = 0;
     sliding = false;
     slideKeyHeld = false;
+    slidePointerHeld = false;
+    playerShiftX = 0;
     vy = 0;
     py = GROUND_Y - RUN_H;
     syncBest();
@@ -354,54 +386,84 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
   }
 
   function bindInput() {
-    const active = () => isActive && isActive();
+    const active = () => typeof isActive === "function" && isActive();
 
     const onKeyDown = (e) => {
       if (!active() || !running) return;
       if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") {
         e.preventDefault();
+        e.stopPropagation();
         jump();
       }
       if (e.code === "ArrowDown" || e.code === "KeyS") {
         e.preventDefault();
-        slideStart(true);
+        e.stopPropagation();
+        slideKeyHeld = true;
+        slideStart();
       }
     };
     const onKeyUp = (e) => {
       if (!active()) return;
       if (e.code === "ArrowDown" || e.code === "KeyS") {
         e.preventDefault();
-        slideEnd();
+        slideKeyHeld = false;
       }
     };
 
-    const getTouchZone = (e) => {
-      const r = canvas.getBoundingClientRect();
-      const scaleY = canvas.height / r.height;
-      const cy = (e.clientY - r.top) * scaleY;
-      return cy < canvas.height * 0.52 ? "jump" : "slide";
+    const onContextMenu = (e) => {
+      if (!active()) return;
+      e.preventDefault();
     };
 
     const onPointerDown = (e) => {
       if (!active() || !running) return;
-      if (getTouchZone(e) === "jump") jump();
-      else slideStart(false);
+      const r = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / r.width;
+      const cx = (e.clientX - r.left) * scaleX;
+
+      if (e.pointerType === "mouse") {
+        if (e.button === 0) {
+          e.preventDefault();
+          jump();
+        } else if (e.button === 2) {
+          e.preventDefault();
+          slidePointerHeld = true;
+          slideStart();
+        }
+        return;
+      }
+
+      if (e.pointerType === "touch" && e.button === 0) {
+        e.preventDefault();
+        if (cx < canvas.width * 0.5) jump();
+        else {
+          slidePointerHeld = true;
+          slideStart();
+        }
+      }
     };
 
-    const onPointerUp = () => {
+    const onPointerUp = (e) => {
       if (!active()) return;
-      slideEnd();
+      if (e.pointerType === "mouse" && e.button === 2) {
+        slidePointerHeld = false;
+      }
+      if (e.pointerType === "touch") {
+        slidePointerHeld = false;
+      }
     };
 
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    canvas.addEventListener("pointerdown", onPointerDown, { passive: true });
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keyup", onKeyUp, true);
+    canvas.addEventListener("contextmenu", onContextMenu);
+    canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
     canvas.addEventListener("pointerup", onPointerUp, { passive: true });
     canvas.addEventListener("pointercancel", onPointerUp, { passive: true });
 
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("keyup", onKeyUp, true);
+      canvas.removeEventListener("contextmenu", onContextMenu);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointercancel", onPointerUp);

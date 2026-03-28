@@ -125,8 +125,15 @@
         </div>
         <button type="button" class="btn" id="runner-restart">重新开始</button>
       </div>
-      <div class="runner-wrap">
-        <canvas id="runner-canvas" width="640" height="280" aria-label="方块跑酷" tabindex="0"></canvas>
+      <div class="runner-layout">
+        <p class="runner-hint">游戏区内：<strong>左键</strong>跳跃 · <strong>右键</strong>滑铲（右键会屏蔽画布菜单）</p>
+        <div class="runner-wrap">
+          <canvas id="runner-canvas" width="640" height="280" aria-label="方块跑酷" tabindex="0"></canvas>
+        </div>
+        <div id="runner-lose-bar" class="ms-lose-bar hidden" aria-hidden="true">
+          <p class="ms-lose-bar__text">你输了！</p>
+          <button type="button" class="btn" id="runner-lose-restart">重新开始</button>
+        </div>
       </div>
     </section>
 
