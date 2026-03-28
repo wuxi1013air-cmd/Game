@@ -56,7 +56,8 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
   }
 
   /**
-   * 随机布局：可破坏砖稀疏/随机填充 + 一组被不可破坏「围墙」围住（留一缺口）的砖 + 少量散落钢砖。
+   * 随机布局：可破坏砖稀疏/随机填充 + 钢砖围墙（缺口仅在上边 / 下边 / 上下同时；
+   * 缺口为连续随机宽度，且不在围墙矩形四角）+ 少量散落钢砖。
    */
   function buildBricks() {
     const list = [];
@@ -93,13 +94,54 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
       }
 
       if (ringCells.length > 0) {
-        // 缺口只开在围墙「朝下」的一边（面向挡板、空场），避免朝画布上/左/右边开口时球贴墙弹不进来
-        const gapCandidates = ringCells.filter(([r]) => r === ringBot);
-        const use = gapCandidates.length > 0 ? gapCandidates : ringCells;
-        const gapPick = use[Math.floor(Math.random() * use.length)];
-        const gapKey = cellKey(gapPick[0], gapPick[1]);
+        const gapKeys = new Set();
+
+        /** 顶边或底边上一段连续开口，列范围排除左右角（仅中间列） */
+        function randomGapOnHorizontalEdge(row) {
+          const cMin = ringLeft + 1;
+          const cMax = ringRight - 1;
+          const span = cMax - cMin + 1;
+          if (span < 1) return [];
+          const gapLen = 1 + Math.floor(Math.random() * span);
+          const startC = cMin + Math.floor(Math.random() * (span - gapLen + 1));
+          const out = [];
+          for (let c = startC; c < startC + gapLen; c++) out.push([row, c]);
+          return out;
+        }
+
+        function addGapCells(cells) {
+          for (const [r, c] of cells) {
+            gapKeys.add(cellKey(r, c));
+          }
+        }
+
+        const span = ringRight - ringLeft - 1;
+        if (span >= 1) {
+          const mode = Math.random();
+          if (mode < 1 / 3) {
+            addGapCells(randomGapOnHorizontalEdge(ringTop));
+          } else if (mode < 2 / 3) {
+            addGapCells(randomGapOnHorizontalEdge(ringBot));
+          } else {
+            addGapCells(randomGapOnHorizontalEdge(ringTop));
+            addGapCells(randomGapOnHorizontalEdge(ringBot));
+          }
+        }
+
+        if (gapKeys.size === 0) {
+          const onTB = ringCells.filter(([r]) => r === ringTop || r === ringBot);
+          const nonCorners = onTB.filter(
+            ([r, c]) => c > ringLeft && c < ringRight,
+          );
+          const pool = nonCorners.length > 0 ? nonCorners : onTB;
+          if (pool.length > 0) {
+            const pick = pool[Math.floor(Math.random() * pool.length)];
+            gapKeys.add(cellKey(pick[0], pick[1]));
+          }
+        }
+
         for (const [r, c] of ringCells) {
-          if (cellKey(r, c) === gapKey) continue;
+          if (gapKeys.has(cellKey(r, c))) continue;
           const k = cellKey(r, c);
           if (occupied.has(k)) continue;
           addBrickAt(list, r, c, true, 215);
