@@ -1,6 +1,6 @@
 /**
- * 横版跑酷：白方块主角，跳跃 + 滑铲（下蹲压缩）。
- * 地刺 / 仙人掌：碰到即死。高墙：仅上部实体；顶墙会被向左推，推到左缘才死；滑铲通过后位姿快速回正。
+ * 横版跑酷：小键盘 8 跳、2 滑铲；趴下/起身速度由 SLIDE_ANIM_SPEED 控制。
+ * 地刺 / 仙人掌：碰到即死。高墙仅上部实体；正面顶墙左推；洞下松铲起身判输。
  */
 
 const STORAGE_KEY = "mini-arcade-runner-best";
@@ -13,7 +13,10 @@ const SLIDE_H = 15;
 const GRAVITY = 2200;
 const JUMP_V = -620;
 const SLIDE_MIN_MS = 420;
-const SLIDE_ANIM_SPEED = 14;
+/** 越大趴下/起身越快 */
+const SLIDE_ANIM_SPEED = 28;
+/** 低于此视为「起身」，高墙洞内与实体重叠则判输 */
+const WALL_CROUCH_MORPH = 0.88;
 /** 顶高墙时向左推（px/s） */
 const WALL_PUSH_SPEED = 260;
 /** 脱离高墙后 playerShiftX 回正速率（px/s） */
@@ -47,10 +50,11 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
   let slideMorph = 0;
   let sliding = false;
   let slideKeyHeld = false;
-  let slidePointerHeld = false;
   let slideUntil = 0;
   /** 被墙向左推时的水平偏移（≤0） */
   let playerShiftX = 0;
+  /** 连续帧：身在墙柱范围内、贴地、头顶未挡、保持趴低（洞下滑行） */
+  let wallScrapeFrames = 0;
 
   function syncBest() {
     if (getBestEl) getBestEl.textContent = String(best);
@@ -193,9 +197,37 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     trySpawn(move);
 
     const now = performance.now();
-    if (!slideKeyHeld && !slidePointerHeld && sliding && now >= slideUntil) sliding = false;
+    if (!slideKeyHeld && sliding && now >= slideUntil) sliding = false;
 
-    if (wallSolidOverlapPlayer(playerHitbox())) {
+    const pScrape = playerHitbox();
+    let inWallColumn = false;
+    for (const obs of obstacles) {
+      if (obs.type !== "wall") continue;
+      if (pScrape.x + pScrape.w > obs.x && pScrape.x < obs.x + 44) inWallColumn = true;
+    }
+    const clearUnderBeam = !wallSolidOverlapPlayer(pScrape);
+    if (!onGround) {
+      wallScrapeFrames = 0;
+    } else if (
+      inWallColumn &&
+      clearUnderBeam &&
+      slideMorph >= WALL_CROUCH_MORPH - 0.03
+    ) {
+      wallScrapeFrames = Math.min(90, wallScrapeFrames + 1);
+    } else if (!inWallColumn) {
+      wallScrapeFrames = 0;
+    }
+
+    const pWall = playerHitbox();
+    if (wallSolidOverlapPlayer(pWall)) {
+      const stoodUpUnderTunnel =
+        wallScrapeFrames >= 2 &&
+        !sliding &&
+        slideMorph < WALL_CROUCH_MORPH;
+      if (stoodUpUnderTunnel) {
+        die();
+        return;
+      }
       playerShiftX -= WALL_PUSH_SPEED * t;
       const pa = playerHitbox();
       if (pa.x <= DEATH_LEFT_X) die();
@@ -326,7 +358,6 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     if (sliding) {
       sliding = false;
       slideKeyHeld = false;
-      slidePointerHeld = false;
     }
     const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
     const onGround = Math.abs(py + h - GROUND_Y) < 5 && vy >= -120;
@@ -345,11 +376,6 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     py = GROUND_Y - hh;
   }
 
-  function slideEnd() {
-    slideKeyHeld = false;
-    slidePointerHeld = false;
-  }
-
   function reset() {
     running = false;
     if (raf) cancelAnimationFrame(raf);
@@ -363,7 +389,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     slideMorph = 0;
     sliding = false;
     slideKeyHeld = false;
-    slidePointerHeld = false;
+    wallScrapeFrames = 0;
     playerShiftX = 0;
     vy = 0;
     py = GROUND_Y - RUN_H;
@@ -390,12 +416,14 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
 
     const onKeyDown = (e) => {
       if (!active() || !running) return;
-      if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") {
+      if (e.code === "Numpad8") {
+        if (e.repeat) return;
         e.preventDefault();
         e.stopPropagation();
         jump();
+        return;
       }
-      if (e.code === "ArrowDown" || e.code === "KeyS") {
+      if (e.code === "Numpad2") {
         e.preventDefault();
         e.stopPropagation();
         slideKeyHeld = true;
@@ -404,101 +432,18 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     };
     const onKeyUp = (e) => {
       if (!active()) return;
-      if (e.code === "ArrowDown" || e.code === "KeyS") {
+      if (e.code === "Numpad2") {
         e.preventDefault();
         slideKeyHeld = false;
       }
     };
 
-    const onContextMenu = (e) => {
-      if (!active()) return;
-      e.preventDefault();
-    };
-
-    const onPointerDown = (e) => {
-      if (!active() || !running) return;
-      const r = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / r.width;
-      const cx = (e.clientX - r.left) * scaleX;
-
-      // 仅把真正的触摸当成「半屏」；其余（mouse / pen / 空字符串等）一律按鼠标键处理，
-      // 避免 Safari 等环境下 pointerType 不是 "mouse" 导致左右键全无响应。
-      if (e.pointerType === "touch") {
-        if (e.button !== 0) return;
-        e.preventDefault();
-        try {
-          canvas.setPointerCapture(e.pointerId);
-        } catch (_) {
-          /* ignore */
-        }
-        if (cx < canvas.width * 0.5) jump();
-        else {
-          slidePointerHeld = true;
-          slideStart();
-        }
-        return;
-      }
-
-      // 左键：部分环境下 pointerdown 主键异常，改由 mousedown 处理（见下方）
-      if (e.button === 2) {
-        e.preventDefault();
-        try {
-          canvas.setPointerCapture(e.pointerId);
-        } catch (_) {
-          /* ignore */
-        }
-        slidePointerHeld = true;
-        slideStart();
-      }
-    };
-
-    /** 桌面端左键跳跃：mousedown 比 pointerdown 主键更稳定（Chrome/Safari 触控板等） */
-    const onMouseDown = (e) => {
-      if (!active() || !running) return;
-      if (e.button !== 0) return;
-      if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
-      e.preventDefault();
-      jump();
-    };
-
-    const onPointerUp = (e) => {
-      if (!active()) return;
-      try {
-        canvas.releasePointerCapture(e.pointerId);
-      } catch (_) {
-        /* ignore */
-      }
-      if (e.pointerType === "touch") {
-        slidePointerHeld = false;
-        return;
-      }
-      if (e.button === 2) slidePointerHeld = false;
-    };
-
-    /** 在画布外松开右键时，pointerup 不一定落在 canvas 上 */
-    const onWindowMouseUp = (e) => {
-      if (!active()) return;
-      if (e.button === 2) slidePointerHeld = false;
-    };
-
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("keyup", onKeyUp, true);
-    window.addEventListener("mouseup", onWindowMouseUp, true);
-    canvas.addEventListener("contextmenu", onContextMenu);
-    canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
-    canvas.addEventListener("pointerup", onPointerUp, { passive: true });
-    canvas.addEventListener("pointercancel", onPointerUp, { passive: true });
-    canvas.addEventListener("mousedown", onMouseDown, true);
 
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
-      window.removeEventListener("mouseup", onWindowMouseUp, true);
-      canvas.removeEventListener("contextmenu", onContextMenu);
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerUp);
-      canvas.removeEventListener("mousedown", onMouseDown, true);
     };
   }
 
