@@ -27,7 +27,7 @@ const WALL_PUSH_SPEED = 260;
 const SHIFT_RECOVER_SPEED = 520;
 const DEATH_LEFT_X = 14;
 
-export function createRunner(canvas, { onScore, onGameOver, getBestEl }) {
+export function createRunner(canvas, { onScore, onGameOver, getBestEl, isAutoJumpEnabled }) {
   const ctx = canvas.getContext("2d");
   const W = canvas.width;
   const H = canvas.height;
@@ -60,6 +60,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl }) {
   /** 连续帧：身在墙柱范围内、贴地、头顶未挡、保持趴低（洞下滑行） */
   let wallScrapeFrames = 0;
   let coyoteRemain = 0;
+  let autoJumpCd = 0;
 
   function syncBest() {
     if (getBestEl) getBestEl.textContent = String(best);
@@ -252,6 +253,37 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl }) {
     } else {
       coyoteRemain = Math.max(0, coyoteRemain - t);
     }
+
+    maybeAutoJump(t);
+  }
+
+  /** 自动跳跃：仅地刺 / 仙人掌（高墙仍须手动 ↓） */
+  function maybeAutoJump(dt) {
+    const enabled = typeof isAutoJumpEnabled === "function" && isAutoJumpEnabled();
+    if (!enabled || !running || sliding) return;
+    autoJumpCd = Math.max(0, autoJumpCd - dt);
+    if (autoJumpCd > 0) return;
+
+    const p = playerHitbox();
+    const hf = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
+    const feet = py + hf;
+    if (feet < GROUND_Y - 8 || vy < -35) return;
+
+    let pick = null;
+    for (const obs of obstacles) {
+      if (obs.type !== "spike" && obs.type !== "cactus") continue;
+      const b = obstacleBox(obs);
+      if (b.x + b.w < p.x + 1) continue;
+      const gap = b.x - p.x;
+      const lo = obs.type === "spike" ? 8 : 18;
+      const hi = obs.type === "spike" ? 82 : 128;
+      if (gap < lo || gap > hi) continue;
+      if (!pick || b.x < obstacleBox(pick).x) pick = obs;
+    }
+    if (pick) {
+      tryJump();
+      autoJumpCd = 0.26;
+    }
   }
 
   function drawObstacle(obs) {
@@ -415,6 +447,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl }) {
     slideKeyHeld = false;
     wallScrapeFrames = 0;
     coyoteRemain = 0;
+    autoJumpCd = 0;
     playerShiftX = 0;
     vy = 0;
     py = GROUND_Y - RUN_H;

@@ -123,10 +123,16 @@
           <span>得分 <strong id="runner-score">0</strong></span>
           <span>最佳 <strong id="runner-best">0</strong></span>
         </div>
-        <button type="button" class="btn" id="runner-restart">重新开始</button>
+        <div class="toolbar-actions">
+          <label class="runner-auto-toggle">
+            <input type="checkbox" id="runner-auto-jump" />
+            <span>自动跳跃</span>
+          </label>
+          <button type="button" class="btn" id="runner-restart">重新开始</button>
+        </div>
       </div>
       <div class="runner-layout">
-        <p class="runner-hint">操作：<strong>↑</strong> 或 <strong>空格</strong> 跳跃 · <strong>↓</strong> 滑铲（按住趴低）；点一下游戏区可确保按键生效</p>
+        <p class="runner-hint">操作：<strong>↑</strong> 或 <strong>空格</strong> 跳跃 · <strong>↓</strong> 滑铲；可开「自动跳跃」应对地刺/仙人掌（高墙仍要手动趴低）</p>
         <div class="runner-wrap">
           <canvas id="runner-canvas" width="640" height="280" aria-label="方块跑酷"></canvas>
         </div>

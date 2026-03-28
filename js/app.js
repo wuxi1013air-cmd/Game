@@ -116,10 +116,19 @@ window.addEventListener("keydown", (e) => {
   snakeApi.setDirection(m[0], m[1]);
 });
 
+const RUNNER_AUTO_JUMP_KEY = "mini-arcade-runner-auto-jump";
+
 const runnerScoreEl = document.getElementById("runner-score");
 const runnerBestEl = document.getElementById("runner-best");
 const runnerCanvas = document.getElementById("runner-canvas");
 const runnerLoseBar = document.getElementById("runner-lose-bar");
+const runnerAutoJumpEl = document.getElementById("runner-auto-jump");
+if (runnerAutoJumpEl) {
+  runnerAutoJumpEl.checked = localStorage.getItem(RUNNER_AUTO_JUMP_KEY) === "1";
+  runnerAutoJumpEl.addEventListener("change", () => {
+    localStorage.setItem(RUNNER_AUTO_JUMP_KEY, runnerAutoJumpEl.checked ? "1" : "0");
+  });
+}
 
 function hideRunnerLoseBar() {
   if (!runnerLoseBar) return;
@@ -141,6 +150,7 @@ const runnerApi = createRunner(runnerCanvas, {
     showRunnerLoseBar();
   },
   getBestEl: runnerBestEl,
+  isAutoJumpEnabled: () => Boolean(runnerAutoJumpEl?.checked),
 });
 
 /** 含部分环境对方向键的兼容（避免未拦截时页面滚动/焦点移动「发光」） */
