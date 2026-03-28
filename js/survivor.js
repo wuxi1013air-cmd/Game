@@ -3,15 +3,30 @@
  */
 
 const PLAYER_MAX_HP = 120;
-const PLAYER_SPEED = 3.4;
-const PLAYER_HIT_R = 13;
+const PLAYER_SPEED = 3.85;
+/** 碰撞半径（小于视觉三角） */
+const PLAYER_HIT_R = 6.5;
+/** 三角外形半径 */
+const TRI_VISUAL_R = 9;
 const BASE_FIRE_MS = 520;
 const BULLET_SPEED = 10;
-const BULLET_R = 3.5;
+const BULLET_R = 2.4;
 const BASE_BULLET_DMG = 11;
 const INVULN_MS = 900;
-const COUNTDOWN_MS = 3000;
+const COUNTDOWN_MS = 5000;
 const BOSS_WAVE = 12;
+
+/** 普通怪碰撞半径（方形视觉略大于 r） */
+const ENEMY_HIT_R = 6;
+const BOSS_HIT_R = 20;
+const BOSS_VISUAL_R = 24;
+
+const BOSS_SPAWN_DELAY_MS = 750;
+
+/** 同波内刷怪间隔：波次越高刷得越快（更压迫） */
+function spawnIntervalForWave(w) {
+  return Math.max(265, 740 - w * 42);
+}
 
 const CARD_DEFS = {
   multishot: { title: "弹幕", desc: "每次开火子弹数量 +1" },
@@ -51,9 +66,23 @@ function drawPolygon(ctx, x, y, r, sides, rotation, fill, stroke) {
   }
   if (stroke) {
     ctx.strokeStyle = stroke;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
   }
+}
+
+/** 在 (0,0) 绘制，枪管沿 +X，稍后会用 rotate(aimAngle) 对准目标 */
+function drawPistolAtOrigin(ctx) {
+  ctx.fillStyle = "#475569";
+  ctx.beginPath();
+  ctx.roundRect(-2, -2.5, 13, 5, 1.5);
+  ctx.fill();
+  ctx.fillStyle = "#334155";
+  ctx.fillRect(-5, -3, 4, 6);
+  ctx.fillStyle = "#1e293b";
+  ctx.beginPath();
+  ctx.arc(11, 0, 1.8, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 /**
@@ -99,6 +128,12 @@ export function createSurvivor(canvas, hooks) {
   const keys = { up: false, down: false, left: false, right: false };
   let countdownMs = 0;
 
+  let waveSpawnTarget = 0;
+  let waveSpawnedCount = 0;
+  let spawnAccMs = 0;
+
+  const margin = PLAYER_HIT_R + 6;
+
   function syncHud(sub = "") {
     hooks.onHud({
       hp: Math.max(0, Math.ceil(hp)),
@@ -125,65 +160,71 @@ export function createSurvivor(canvas, hooks) {
     bullets = [];
     enemies = [];
     countdownMs = 0;
+    waveSpawnTarget = 0;
+    waveSpawnedCount = 0;
+    spawnAccMs = 0;
     syncHud("");
   }
 
-  function spawnEnemiesForWave() {
-    enemies = [];
-    if (wave === BOSS_WAVE) {
-      const side = Math.floor(Math.random() * 4);
-      let bx = W / 2;
-      let by = H / 2;
-      const m = 80;
-      if (side === 0) {
-        bx = m + Math.random() * (W - 2 * m);
-        by = m;
-      } else if (side === 1) {
-        bx = W - m;
-        by = m + Math.random() * (H - 2 * m);
-      } else if (side === 2) {
-        bx = m + Math.random() * (W - 2 * m);
-        by = H - m;
-      } else {
-        bx = m;
-        by = m + Math.random() * (H - 2 * m);
-      }
-      enemies.push({
-        x: bx,
-        y: by,
-        kind: "boss",
-        hp: 520,
-        maxHp: 520,
-        r: 38,
-        speed: 1.05,
-        contactDmg: 50,
-        rot: 0,
-      });
-      return;
+  function randomEdgePoint() {
+    const pad = 8;
+    const edge = Math.floor(Math.random() * 4);
+    if (edge === 0) {
+      return { x: pad + Math.random() * (W - 2 * pad), y: pad };
     }
-    const n = 4 + wave * 2;
+    if (edge === 1) {
+      return { x: W - pad, y: pad + Math.random() * (H - 2 * pad) };
+    }
+    if (edge === 2) {
+      return { x: pad + Math.random() * (W - 2 * pad), y: H - pad };
+    }
+    return { x: pad, y: pad + Math.random() * (H - 2 * pad) };
+  }
+
+  function spawnSquareAtEdge() {
+    const p = randomEdgePoint();
     const dmg = normalEnemyContactDamage(wave);
-    for (let i = 0; i < n; i++) {
-      let ex;
-      let ey;
-      let tries = 0;
-      do {
-        ex = 40 + Math.random() * (W - 80);
-        ey = 40 + Math.random() * (H - 80);
-        tries++;
-      } while (Math.hypot(ex - px, ey - py) < 100 && tries < 30);
-      const spd = Math.min(2.1 + wave * 0.14, 4.2);
-      enemies.push({
-        x: ex,
-        y: ey,
-        kind: "square",
-        hp: 18 + wave * 6,
-        maxHp: 18 + wave * 6,
-        r: 12,
-        speed: spd,
-        contactDmg: dmg,
-        rot: Math.random() * Math.PI,
-      });
+    const spd = Math.min(1.38 + wave * 0.065, 2.35);
+    const hpVal = Math.round(17 + wave * 6 + Math.floor(wave / 3) * 5);
+    enemies.push({
+      x: p.x,
+      y: p.y,
+      kind: "square",
+      hp: hpVal,
+      maxHp: hpVal,
+      r: ENEMY_HIT_R,
+      speed: spd,
+      contactDmg: dmg,
+      rot: Math.random() * Math.PI,
+    });
+  }
+
+  function spawnBossAtEdge() {
+    const p = randomEdgePoint();
+    enemies.push({
+      x: p.x,
+      y: p.y,
+      kind: "boss",
+      hp: 480,
+      maxHp: 480,
+      r: BOSS_HIT_R,
+      speed: 0.78,
+      contactDmg: 50,
+      rot: 0,
+    });
+  }
+
+  /** 新一波：清空场上怪，从边缘陆续刷出 */
+  function startWaveSpawning() {
+    enemies = [];
+    waveSpawnedCount = 0;
+    spawnAccMs = 0;
+    if (wave === BOSS_WAVE) {
+      waveSpawnTarget = 1;
+    } else {
+      waveSpawnTarget = 5 + wave * 3 + Math.floor((wave - 1) / 2);
+      spawnSquareAtEdge();
+      waveSpawnedCount = 1;
     }
   }
 
@@ -203,6 +244,7 @@ export function createSurvivor(canvas, hooks) {
   function fireVolley() {
     const target = nearestEnemy();
     if (target) aimAngle = Math.atan2(target.y - py, target.x - px);
+    const muzzle = TRI_VISUAL_R * 0.35 + 10;
     for (let p = 0; p < pistolCount; p++) {
       const pistolOff = (p - (pistolCount - 1) / 2) * 0.14;
       for (let s = 0; s < shotsPerVolley; s++) {
@@ -210,14 +252,13 @@ export function createSurvivor(canvas, hooks) {
         const ang = aimAngle + pistolOff + shotOff;
         const dmg = BASE_BULLET_DMG * damageMult;
         bullets.push({
-          x: px + Math.cos(ang) * 18,
-          y: py + Math.sin(ang) * 18,
+          x: px + Math.cos(ang) * muzzle,
+          y: py + Math.sin(ang) * muzzle,
           vx: Math.cos(ang) * BULLET_SPEED,
           vy: Math.sin(ang) * BULLET_SPEED,
           dmg,
           pierceLeft: pierceExtra,
         });
-        idx++;
       }
     }
   }
@@ -257,16 +298,12 @@ export function createSurvivor(canvas, hooks) {
     hooks.onHideCards();
     phase = "countdown";
     countdownMs = COUNTDOWN_MS;
-    syncHud("下一波 3…");
+    syncHud(`下一波 ${Math.ceil(COUNTDOWN_MS / 1000)} 秒后开始…`);
     running = true;
     lastT = performance.now();
     raf = requestAnimationFrame(tick);
   }
 
-  /**
-   * 由 UI 在玩家选好卡后调用。
-   * @param {string} cardId
-   */
   function pickCard(cardId) {
     if (phase !== "cards") return;
     applyCard(cardId);
@@ -284,6 +321,10 @@ export function createSurvivor(canvas, hooks) {
     beginCardPhase();
   }
 
+  function waveFullyComplete() {
+    return waveSpawnedCount >= waveSpawnTarget && enemies.length === 0;
+  }
+
   function tick(now) {
     if (!running) return;
     const dt = Math.min(50, now - lastT);
@@ -295,7 +336,7 @@ export function createSurvivor(canvas, hooks) {
       syncHud(sec > 0 ? `下一波 ${sec}…` : "");
       if (countdownMs <= 0) {
         phase = "combat";
-        spawnEnemiesForWave();
+        startWaveSpawning();
         syncHud("");
       }
       draw();
@@ -322,11 +363,27 @@ export function createSurvivor(canvas, hooks) {
       px += (mx / len) * PLAYER_SPEED * step;
       py += (my / len) * PLAYER_SPEED * step;
     }
-    px = Math.max(PLAYER_HIT_R + 8, Math.min(W - PLAYER_HIT_R - 8, px));
-    py = Math.max(PLAYER_HIT_R + 8, Math.min(H - PLAYER_HIT_R - 8, py));
+    px = Math.max(margin, Math.min(W - margin, px));
+    py = Math.max(margin, Math.min(H - margin, py));
 
     const nearest = nearestEnemy();
     if (nearest) aimAngle = Math.atan2(nearest.y - py, nearest.x - px);
+
+    if (wave === BOSS_WAVE) {
+      spawnAccMs += dt;
+      if (waveSpawnedCount < waveSpawnTarget && spawnAccMs >= BOSS_SPAWN_DELAY_MS) {
+        spawnBossAtEdge();
+        waveSpawnedCount = 1;
+      }
+    } else {
+      const interval = spawnIntervalForWave(wave);
+      spawnAccMs += dt;
+      while (waveSpawnedCount < waveSpawnTarget && spawnAccMs >= interval) {
+        spawnAccMs -= interval;
+        spawnSquareAtEdge();
+        waveSpawnedCount++;
+      }
+    }
 
     fireAcc += dt;
     const fireInterval = BASE_FIRE_MS / atkSpdMult;
@@ -349,7 +406,7 @@ export function createSurvivor(canvas, hooks) {
       const d = Math.hypot(dx, dy) || 1;
       e.x += (dx / d) * e.speed * step;
       e.y += (dy / d) * e.speed * step;
-      e.rot += (dt / 400) * (e.kind === "boss" ? 0.4 : 1.2);
+      e.rot += (dt / 400) * (e.kind === "boss" ? 0.35 : 1.1);
     }
 
     for (let bi = bullets.length - 1; bi >= 0; bi--) {
@@ -385,7 +442,7 @@ export function createSurvivor(canvas, hooks) {
       return;
     }
 
-    if (enemies.length === 0) {
+    if (waveFullyComplete()) {
       resolveWaveClear();
       draw();
       return;
@@ -399,9 +456,9 @@ export function createSurvivor(canvas, hooks) {
   function draw() {
     ctx.fillStyle = "#0a0d12";
     ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = "rgba(110, 231, 183, 0.15)";
+    ctx.strokeStyle = "rgba(110, 231, 183, 0.12)";
     ctx.lineWidth = 1;
-    const g = 40;
+    const g = 48;
     for (let x = 0; x <= W; x += g) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
@@ -421,7 +478,7 @@ export function createSurvivor(canvas, hooks) {
           ctx,
           e.x,
           e.y,
-          e.r,
+          BOSS_VISUAL_R,
           5,
           e.rot,
           "rgba(244, 114, 182, 0.35)",
@@ -433,8 +490,8 @@ export function createSurvivor(canvas, hooks) {
         ctx.rotate(e.rot);
         ctx.fillStyle = "rgba(167, 139, 250, 0.45)";
         ctx.strokeStyle = "#a78bfa";
-        ctx.lineWidth = 2;
-        const s = e.r * 1.35;
+        ctx.lineWidth = 1.5;
+        const s = e.r * 1.45;
         ctx.fillRect(-s / 2, -s / 2, s, s);
         ctx.strokeRect(-s / 2, -s / 2, s, s);
         ctx.restore();
@@ -447,23 +504,37 @@ export function createSurvivor(canvas, hooks) {
       ctx.fillStyle = "#fde68a";
       ctx.fill();
       ctx.strokeStyle = "#fbbf24";
+      ctx.lineWidth = 1;
       ctx.stroke();
     }
 
+    const blink = invulnMs > 0 && Math.floor(invulnMs / 100) % 2 === 0;
     ctx.save();
     ctx.translate(px, py);
     ctx.rotate(aimAngle + Math.PI / 2);
-    const blink = invulnMs > 0 && Math.floor(invulnMs / 100) % 2 === 0;
     drawPolygon(
       ctx,
       0,
       0,
-      PLAYER_HIT_R + 4,
+      TRI_VISUAL_R,
       3,
       0,
-      blink ? "rgba(110, 231, 183, 0.35)" : "rgba(110, 231, 183, 0.85)",
+      blink ? "rgba(110, 231, 183, 0.35)" : "rgba(110, 231, 183, 0.88)",
       "#6ee7b7",
     );
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(aimAngle);
+    if (typeof ctx.roundRect !== "function") {
+      ctx.fillStyle = "#475569";
+      ctx.fillRect(-2, -2.5, 13, 5);
+      ctx.fillStyle = "#334155";
+      ctx.fillRect(-5, -3, 4, 6);
+    } else {
+      drawPistolAtOrigin(ctx);
+    }
     ctx.restore();
 
     if (phase === "countdown") {
@@ -482,7 +553,7 @@ export function createSurvivor(canvas, hooks) {
     start() {
       if (running) return;
       reset();
-      spawnEnemiesForWave();
+      startWaveSpawning();
       running = true;
       lastT = performance.now();
       syncHud("");

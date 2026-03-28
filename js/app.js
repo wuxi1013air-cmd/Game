@@ -234,7 +234,7 @@ const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
   },
   onOfferCards: ({ wave, options }) => {
     survivorCardTitle.textContent = `完成第 ${wave} 波`;
-    survivorCardSub.textContent = "三选一强化，选完后 3 秒出现下一波敌人";
+    survivorCardSub.textContent = "三选一强化，选完后 5 秒出现下一波敌人";
     survivorCardGrid.innerHTML = "";
     for (const opt of options) {
       const btn = document.createElement("button");
