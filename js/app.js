@@ -127,6 +127,13 @@ function breakoutPointerMove(e) {
 breakoutCanvas.addEventListener("pointermove", breakoutPointerMove);
 breakoutCanvas.addEventListener("mousemove", breakoutPointerMove);
 
+function breakoutPointerDown(e) {
+  if (!views.breakout.classList.contains("active")) return;
+  if (e.button !== 0) return;
+  breakoutApi.launchBall();
+}
+breakoutCanvas.addEventListener("pointerdown", breakoutPointerDown);
+
 const g2048ScoreEl = document.getElementById("g2048-score");
 const g2048BestEl = document.getElementById("g2048-best");
 

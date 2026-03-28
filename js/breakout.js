@@ -10,6 +10,11 @@ const PADDLE_Y_OFF = 28;
 const BALL_VX_RANGE = [3.6, 5.4];
 const BALL_VY_UP = [4.2, 5.2];
 const BALL_SPEED_CAP = 10.5;
+/** 分裂出的两球速率（与竖直成 45° 向左右上） */
+const SPLIT_SPEED = 5.4;
+const POWERUP_SPAWN_CHANCE = 0.1;
+const POWERUP_FALL_VY = 2.8;
+const POWERUP_R = 11;
 
 export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
   const ctx = canvas.getContext("2d");
@@ -20,7 +25,12 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
   const rowGap = 4;
 
   let paddleX = W / 2 - PADDLE_W / 2;
-  let ball = { x: W / 2, y: H - PADDLE_Y_OFF - BALL_R - 20, vx: 4, vy: -4.5 };
+  /** @type {{ x: number; y: number; vx: number; vy: number }[]} */
+  let balls = [];
+  /** 未点击发球时，球贴在挡板上 */
+  let launched = false;
+  /** @type {{ x: number; y: number; vy: number; r: number }[]} */
+  let powerUps = [];
   let bricks = [];
   let score = 0;
   let lives = 3;
@@ -96,7 +106,6 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
       if (ringCells.length > 0) {
         const gapKeys = new Set();
 
-        /** 顶边或底边上一段连续开口，列范围排除左右角（仅中间列） */
         function randomGapOnHorizontalEdge(row) {
           const cMin = ringLeft + 1;
           const cMax = ringRight - 1;
@@ -202,21 +211,169 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
     onLives?.(lives);
   }
 
-  function reset() {
-    stop();
-    paddleX = W / 2 - PADDLE_W / 2;
-    const v = randomBallVelocity();
-    ball = {
-      x: W / 2,
-      y: H - PADDLE_Y_OFF - PADDLE_H - BALL_R - 4,
-      vx: v.vx,
-      vy: v.vy,
+  function heldBallPos() {
+    const py = H - PADDLE_Y_OFF;
+    return {
+      x: paddleX + PADDLE_W / 2,
+      y: py - BALL_R - 4,
     };
-    score = 0;
-    lives = 3;
-    buildBricks();
+  }
+
+  function maybeSpawnPowerUp(brick) {
+    if (Math.random() >= POWERUP_SPAWN_CHANCE) return;
+    powerUps.push({
+      x: brick.x + brick.w / 2,
+      y: brick.y + brick.h / 2,
+      vy: POWERUP_FALL_VY,
+      r: POWERUP_R,
+    });
+  }
+
+  /** 挡板接住：从触点分裂两球，沿左上/右上 45°（相对水平向上） */
+  function applySplitPickup(pu) {
+    const py = H - PADDLE_Y_OFF;
+    const spawnX = Math.max(BALL_R, Math.min(W - BALL_R, pu.x));
+    const spawnY = Math.min(pu.y, py - BALL_R - 2);
+    const h = SPLIT_SPEED / Math.SQRT2;
+    balls.push({ x: spawnX, y: spawnY, vx: -h, vy: -h });
+    balls.push({ x: spawnX, y: spawnY, vx: h, vy: -h });
+    launched = true;
+  }
+
+  function tryCollectPowerUps() {
+    const py = H - PADDLE_Y_OFF;
+    const next = [];
+    for (const pu of powerUps) {
+      const hitY = pu.y + pu.r >= py - 2 && pu.y - pu.r <= py + PADDLE_H + 4;
+      const hitX = pu.x + pu.r >= paddleX && pu.x - pu.r <= paddleX + PADDLE_W;
+      if (hitX && hitY) {
+        applySplitPickup(pu);
+        continue;
+      }
+      if (pu.y - pu.r > H + 30) continue;
+      next.push(pu);
+    }
+    powerUps = next;
+  }
+
+  function loseAllBallsLife() {
+    lives -= 1;
     syncHud();
-    draw();
+    balls = [];
+    launched = false;
+    if (lives <= 0) {
+      stop();
+      onLose?.(score);
+      return;
+    }
+  }
+
+  function reflectBrick(b, ball) {
+    const cx = b.x + b.w / 2;
+    const cy = b.y + b.h / 2;
+    const dx = ball.x - cx;
+    const dy = ball.y - cy;
+    if (Math.abs(dx / b.w) > Math.abs(dy / b.h)) {
+      ball.vx *= -1;
+    } else {
+      ball.vy *= -1;
+    }
+  }
+
+  function capBallSpeed(ball) {
+    const sp = Math.hypot(ball.vx, ball.vy);
+    if (sp > BALL_SPEED_CAP) {
+      ball.vx *= BALL_SPEED_CAP / sp;
+      ball.vy *= BALL_SPEED_CAP / sp;
+    }
+  }
+
+  function stepBall(ball) {
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    if (ball.x < BALL_R) {
+      ball.x = BALL_R;
+      ball.vx *= -1;
+    }
+    if (ball.x > W - BALL_R) {
+      ball.x = W - BALL_R;
+      ball.vx *= -1;
+    }
+    if (ball.y < BALL_R) {
+      ball.y = BALL_R;
+      ball.vy *= -1;
+    }
+
+    const py = H - PADDLE_Y_OFF;
+    if (
+      ball.y + BALL_R >= py &&
+      ball.y + BALL_R <= py + PADDLE_H + 4 &&
+      ball.x >= paddleX &&
+      ball.x <= paddleX + PADDLE_W
+    ) {
+      ball.y = py - BALL_R;
+      const hit = (ball.x - (paddleX + PADDLE_W / 2)) / (PADDLE_W / 2);
+      ball.vx += hit * 2.4;
+      ball.vy = -Math.abs(ball.vy) - 0.08;
+      capBallSpeed(ball);
+    }
+
+    for (const b of bricks) {
+      if (!b.alive) continue;
+      if (
+        ball.x + BALL_R > b.x &&
+        ball.x - BALL_R < b.x + b.w &&
+        ball.y + BALL_R > b.y &&
+        ball.y - BALL_R < b.y + b.h
+      ) {
+        reflectBrick(b, ball);
+        if (!b.indestructible) {
+          b.alive = false;
+          score += 10;
+          maybeSpawnPowerUp(b);
+          syncHud();
+        }
+        break;
+      }
+    }
+  }
+
+  function stepPowerUpsFall() {
+    for (const pu of powerUps) {
+      pu.y += pu.vy;
+    }
+  }
+
+  function step() {
+    stepPowerUpsFall();
+    tryCollectPowerUps();
+
+    if (!launched) {
+      if (!destructibleRemaining()) {
+        stop();
+        onWin?.(score);
+      }
+      return;
+    }
+
+    for (let i = balls.length - 1; i >= 0; i--) {
+      const ball = balls[i];
+      stepBall(ball);
+      if (ball.y > H + 20) {
+        balls.splice(i, 1);
+        if (balls.length > 0) {
+          /* 仍有其他球：不扣命、不重新部署 */
+        } else {
+          loseAllBallsLife();
+        }
+      }
+    }
+
+    if (!destructibleRemaining()) {
+      stop();
+      onWin?.(score);
+    }
   }
 
   function drawBrick(b) {
@@ -249,11 +406,52 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
     }
   }
 
+  function drawBallAt(x, y) {
+    const g = ctx.createRadialGradient(x - 2, y - 2, 1, x, y, BALL_R);
+    g.addColorStop(0, "#fff");
+    g.addColorStop(0.4, "#a5f3fc");
+    g.addColorStop(1, "#0e7490");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, BALL_R, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawPowerUp(pu) {
+    const grd = ctx.createRadialGradient(pu.x - 3, pu.y - 3, 1, pu.x, pu.y, pu.r);
+    grd.addColorStop(0, "#ffe566");
+    grd.addColorStop(0.55, "#f59e0b");
+    grd.addColorStop(1, "#d97706");
+    ctx.beginPath();
+    ctx.arc(pu.x, pu.y, pu.r, 0, Math.PI * 2);
+    ctx.fillStyle = grd;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.45)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    const dots = [
+      [pu.x - 4, pu.y],
+      [pu.x, pu.y - 2],
+      [pu.x + 4, pu.y],
+    ];
+    ctx.fillStyle = "#fff";
+    for (const [dx, dy] of dots) {
+      ctx.beginPath();
+      ctx.arc(dx, dy, 2.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   function draw() {
     ctx.fillStyle = "#0a0c12";
     ctx.fillRect(0, 0, W, H);
 
     bricks.forEach(drawBrick);
+
+    for (const pu of powerUps) {
+      drawPowerUp(pu);
+    }
 
     const py = H - PADDLE_Y_OFF;
     ctx.fillStyle = "#6ee7b7";
@@ -265,99 +463,13 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
       ctx.fillRect(paddleX, py, PADDLE_W, PADDLE_H);
     }
 
-    const g = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 1, ball.x, ball.y, BALL_R);
-    g.addColorStop(0, "#fff");
-    g.addColorStop(0.4, "#a5f3fc");
-    g.addColorStop(1, "#0e7490");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  function reflectBrick(b) {
-    const cx = b.x + b.w / 2;
-    const cy = b.y + b.h / 2;
-    const dx = ball.x - cx;
-    const dy = ball.y - cy;
-    if (Math.abs(dx / b.w) > Math.abs(dy / b.h)) {
-      ball.vx *= -1;
+    if (!launched) {
+      const h = heldBallPos();
+      drawBallAt(h.x, h.y);
     } else {
-      ball.vy *= -1;
-    }
-  }
-
-  function step() {
-    ball.x += ball.vx;
-    ball.y += ball.vy;
-
-    if (ball.x < BALL_R) {
-      ball.x = BALL_R;
-      ball.vx *= -1;
-    }
-    if (ball.x > W - BALL_R) {
-      ball.x = W - BALL_R;
-      ball.vx *= -1;
-    }
-    if (ball.y < BALL_R) {
-      ball.y = BALL_R;
-      ball.vy *= -1;
-    }
-
-    const py = H - PADDLE_Y_OFF;
-    if (
-      ball.y + BALL_R >= py &&
-      ball.y + BALL_R <= py + PADDLE_H + 4 &&
-      ball.x >= paddleX &&
-      ball.x <= paddleX + PADDLE_W
-    ) {
-      ball.y = py - BALL_R;
-      const hit = (ball.x - (paddleX + PADDLE_W / 2)) / (PADDLE_W / 2);
-      ball.vx += hit * 2.4;
-      ball.vy = -Math.abs(ball.vy) - 0.08;
-      const sp = Math.hypot(ball.vx, ball.vy);
-      if (sp > BALL_SPEED_CAP) {
-        ball.vx *= BALL_SPEED_CAP / sp;
-        ball.vy *= BALL_SPEED_CAP / sp;
+      for (const ball of balls) {
+        drawBallAt(ball.x, ball.y);
       }
-    }
-
-    for (const b of bricks) {
-      if (!b.alive) continue;
-      if (
-        ball.x + BALL_R > b.x &&
-        ball.x - BALL_R < b.x + b.w &&
-        ball.y + BALL_R > b.y &&
-        ball.y - BALL_R < b.y + b.h
-      ) {
-        reflectBrick(b);
-        if (!b.indestructible) {
-          b.alive = false;
-          score += 10;
-          syncHud();
-        }
-        break;
-      }
-    }
-
-    if (ball.y > H + 20) {
-      lives -= 1;
-      syncHud();
-      if (lives <= 0) {
-        stop();
-        onLose?.(score);
-        return;
-      }
-      const v = randomBallVelocity();
-      ball.x = paddleX + PADDLE_W / 2;
-      ball.y = py - BALL_R - 4;
-      ball.vx = v.vx;
-      ball.vy = v.vy;
-    }
-
-    if (!destructibleRemaining()) {
-      stop();
-      onWin?.(score);
     }
   }
 
@@ -366,6 +478,27 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
     step();
     draw();
     raf = requestAnimationFrame(loop);
+  }
+
+  function reset() {
+    stop();
+    paddleX = W / 2 - PADDLE_W / 2;
+    balls = [];
+    launched = false;
+    powerUps = [];
+    score = 0;
+    lives = 3;
+    buildBricks();
+    syncHud();
+    draw();
+  }
+
+  function launchBall() {
+    if (!running || launched) return;
+    const v = randomBallVelocity();
+    const h = heldBallPos();
+    balls.push({ x: h.x, y: h.y, vx: v.vx, vy: v.vy });
+    launched = true;
   }
 
   function start() {
@@ -388,5 +521,5 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
 
   reset();
 
-  return { reset, start, stop, setPaddleFromClientX };
+  return { reset, start, stop, setPaddleFromClientX, launchBall };
 }
