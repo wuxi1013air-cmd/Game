@@ -224,24 +224,40 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
   }
 
   /**
-   * 挡板接住技能：场上每一颗球各分裂一次（原位置两颗 45° 球），无球时在贴挡板位置按一颗分裂。
-   * 总数不超过 MAX_BALLS，先处理的球优先占满名额。
+   * 挡板接住技能：每颗现有球保留原速，同位置再「多出」两颗 45° 新球（不是 1 换 2）。
+   * 无球时只在贴挡板处生成两颗新球。总数上限 MAX_BALLS。
    */
   function applySplitPickup() {
     const hsp = SPLIT_SPEED / Math.SQRT2;
-    const snap = balls.length > 0 ? balls.slice() : null;
-    const sources =
-      snap && snap.length > 0 ? snap : [{ ...heldBallPos(), vx: 0, vy: 0 }];
+    const snap = balls.length > 0 ? balls.slice() : [];
+
+    function clampPos(x, y) {
+      return {
+        x: Math.max(BALL_R, Math.min(W - BALL_R, x)),
+        y: Math.max(BALL_R, Math.min(H - PADDLE_Y_OFF - BALL_R - 8, y)),
+      };
+    }
 
     const next = [];
-    for (const b of sources) {
-      if (next.length >= MAX_BALLS) break;
-      const sx = Math.max(BALL_R, Math.min(W - BALL_R, b.x));
-      const sy = Math.max(BALL_R, Math.min(H - PADDLE_Y_OFF - BALL_R - 8, b.y));
-      next.push({ x: sx, y: sy, vx: -hsp, vy: -hsp });
-      if (next.length >= MAX_BALLS) break;
-      next.push({ x: sx, y: sy, vx: hsp, vy: -hsp });
+    if (snap.length === 0) {
+      const h = heldBallPos();
+      const p = clampPos(h.x, h.y);
+      next.push({ x: p.x, y: p.y, vx: -hsp, vy: -hsp });
+      if (next.length < MAX_BALLS) {
+        next.push({ x: p.x, y: p.y, vx: hsp, vy: -hsp });
+      }
+    } else {
+      for (const b of snap) {
+        if (next.length >= MAX_BALLS) break;
+        const p = clampPos(b.x, b.y);
+        next.push({ x: p.x, y: p.y, vx: b.vx, vy: b.vy });
+        if (next.length >= MAX_BALLS) break;
+        next.push({ x: p.x, y: p.y, vx: -hsp, vy: -hsp });
+        if (next.length >= MAX_BALLS) break;
+        next.push({ x: p.x, y: p.y, vx: hsp, vy: -hsp });
+      }
     }
+
     balls = next;
     launched = true;
   }
