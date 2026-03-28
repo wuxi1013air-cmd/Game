@@ -268,16 +268,75 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
     }
   }
 
-  function reflectBrick(b, ball) {
-    const cx = b.x + b.w / 2;
-    const cy = b.y + b.h / 2;
-    const dx = ball.x - cx;
-    const dy = ball.y - cy;
-    if (Math.abs(dx / b.w) > Math.abs(dy / b.h)) {
-      ball.vx *= -1;
-    } else {
-      ball.vy *= -1;
+  /**
+   * 圆与轴对齐砖块：用最近点法线推出穿透再反射，避免嵌在边里每帧乱弹导致鬼畜。
+   */
+  function circleOverlapsBrick(b, ball) {
+    const qx = Math.max(b.x, Math.min(ball.x, b.x + b.w));
+    const qy = Math.max(b.y, Math.min(ball.y, b.y + b.h));
+    const dx = ball.x - qx;
+    const dy = ball.y - qy;
+    return dx * dx + dy * dy < BALL_R * BALL_R - 1e-4;
+  }
+
+  function resolveBrickCollision(b, ball) {
+    const qx = Math.max(b.x, Math.min(ball.x, b.x + b.w));
+    const qy = Math.max(b.y, Math.min(ball.y, b.y + b.h));
+    let dx = ball.x - qx;
+    let dy = ball.y - qy;
+    let d2 = dx * dx + dy * dy;
+    const r2 = BALL_R * BALL_R;
+    if (d2 > r2 + 1e-3) return false;
+
+    const eps = 0.75;
+
+    if (d2 < 1e-6) {
+      const pL = ball.x - b.x;
+      const pR = b.x + b.w - ball.x;
+      const pT = ball.y - b.y;
+      const pB = b.y + b.h - ball.y;
+      let m = pL;
+      let side = "l";
+      if (pR < m) {
+        m = pR;
+        side = "r";
+      }
+      if (pT < m) {
+        m = pT;
+        side = "t";
+      }
+      if (pB < m) {
+        side = "b";
+      }
+      if (side === "l") {
+        ball.x = b.x - BALL_R - eps;
+        if (ball.vx > 0) ball.vx *= -1;
+      } else if (side === "r") {
+        ball.x = b.x + b.w + BALL_R + eps;
+        if (ball.vx < 0) ball.vx *= -1;
+      } else if (side === "t") {
+        ball.y = b.y - BALL_R - eps;
+        if (ball.vy > 0) ball.vy *= -1;
+      } else {
+        ball.y = b.y + b.h + BALL_R + eps;
+        if (ball.vy < 0) ball.vy *= -1;
+      }
+      return true;
     }
+
+    const len = Math.sqrt(d2);
+    const nx = dx / len;
+    const ny = dy / len;
+    const penetration = BALL_R - len;
+    ball.x += nx * (penetration + eps);
+    ball.y += ny * (penetration + eps);
+
+    const velDot = ball.vx * nx + ball.vy * ny;
+    if (velDot < 0) {
+      ball.vx -= 2 * velDot * nx;
+      ball.vy -= 2 * velDot * ny;
+    }
+    return true;
   }
 
   function capBallSpeed(ball) {
@@ -321,21 +380,15 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
 
     for (const b of bricks) {
       if (!b.alive) continue;
-      if (
-        ball.x + BALL_R > b.x &&
-        ball.x - BALL_R < b.x + b.w &&
-        ball.y + BALL_R > b.y &&
-        ball.y - BALL_R < b.y + b.h
-      ) {
-        reflectBrick(b, ball);
-        if (!b.indestructible) {
-          b.alive = false;
-          score += 10;
-          maybeSpawnPowerUp(b);
-          syncHud();
-        }
-        break;
+      if (!circleOverlapsBrick(b, ball)) continue;
+      if (!resolveBrickCollision(b, ball)) continue;
+      if (!b.indestructible) {
+        b.alive = false;
+        score += 10;
+        maybeSpawnPowerUp(b);
+        syncHud();
       }
+      break;
     }
   }
 
