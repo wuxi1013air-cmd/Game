@@ -436,6 +436,10 @@ document.getElementById("sol-restart").addEventListener("click", () => {
 document.querySelectorAll(".game-card").forEach((card) => {
   card.addEventListener("click", () => {
     const game = card.dataset.game;
+    if (game !== "survivor") {
+      survivorApi.stop();
+      hideSurvivorCardModal();
+    }
     hideOverlay();
     if (game === "snake") {
       showView("snake");

@@ -3,7 +3,7 @@
  */
 
 const PLAYER_MAX_HP = 120;
-const PLAYER_SPEED = 3.85;
+const PLAYER_SPEED = 4.15;
 /** 碰撞半径（小于视觉三角） */
 const PLAYER_HIT_R = 6.5;
 /** 三角外形半径 */
@@ -21,7 +21,9 @@ const ENEMY_HIT_R = 6;
 const BOSS_HIT_R = 20;
 const BOSS_VISUAL_R = 24;
 
-const BOSS_SPAWN_DELAY_MS = 750;
+const BOSS_SPAWN_DELAY_MS = 900;
+/** 每波首只怪出现前的延迟（进场时场上为空） */
+const FIRST_SPAWN_DELAY_MS = 1000;
 
 /** 同波内刷怪间隔：波次越高刷得越快（更压迫） */
 function spawnIntervalForWave(w) {
@@ -134,6 +136,12 @@ export function createSurvivor(canvas, hooks) {
 
   const margin = PLAYER_HIT_R + 6;
 
+  function halt() {
+    running = false;
+    cancelAnimationFrame(raf);
+    raf = 0;
+  }
+
   function syncHud(sub = "") {
     hooks.onHud({
       hp: Math.max(0, Math.ceil(hp)),
@@ -144,6 +152,7 @@ export function createSurvivor(canvas, hooks) {
   }
 
   function reset() {
+    halt();
     phase = "combat";
     wave = 1;
     hp = PLAYER_MAX_HP;
@@ -214,17 +223,16 @@ export function createSurvivor(canvas, hooks) {
     });
   }
 
-  /** 新一波：清空场上怪，从边缘陆续刷出 */
+  /** 新一波：清空场上怪，从边缘按间隔陆续刷出（首只也有延迟） */
   function startWaveSpawning() {
     enemies = [];
+    bullets = [];
     waveSpawnedCount = 0;
     spawnAccMs = 0;
     if (wave === BOSS_WAVE) {
       waveSpawnTarget = 1;
     } else {
       waveSpawnTarget = 5 + wave * 3 + Math.floor((wave - 1) / 2);
-      spawnSquareAtEdge();
-      waveSpawnedCount = 1;
     }
   }
 
@@ -287,8 +295,7 @@ export function createSurvivor(canvas, hooks) {
 
   function beginCardPhase() {
     phase = "cards";
-    running = false;
-    cancelAnimationFrame(raf);
+    halt();
     syncHud("选择强化卡牌");
     const options = pickThreeCards();
     hooks.onOfferCards({ wave, options });
@@ -313,8 +320,7 @@ export function createSurvivor(canvas, hooks) {
 
   function resolveWaveClear() {
     if (wave === BOSS_WAVE) {
-      running = false;
-      cancelAnimationFrame(raf);
+      halt();
       hooks.onVictory();
       return;
     }
@@ -322,6 +328,7 @@ export function createSurvivor(canvas, hooks) {
   }
 
   function waveFullyComplete() {
+    if (waveSpawnTarget <= 0) return false;
     return waveSpawnedCount >= waveSpawnTarget && enemies.length === 0;
   }
 
@@ -378,8 +385,12 @@ export function createSurvivor(canvas, hooks) {
     } else {
       const interval = spawnIntervalForWave(wave);
       spawnAccMs += dt;
-      while (waveSpawnedCount < waveSpawnTarget && spawnAccMs >= interval) {
-        spawnAccMs -= interval;
+      let guard = 40;
+      while (guard-- > 0 && waveSpawnedCount < waveSpawnTarget) {
+        const threshold =
+          waveSpawnedCount === 0 ? FIRST_SPAWN_DELAY_MS : interval;
+        if (spawnAccMs < threshold) break;
+        spawnAccMs -= threshold;
         spawnSquareAtEdge();
         waveSpawnedCount++;
       }
@@ -435,8 +446,7 @@ export function createSurvivor(canvas, hooks) {
     }
 
     if (hp <= 0) {
-      running = false;
-      cancelAnimationFrame(raf);
+      halt();
       hooks.onGameOver(wave);
       draw();
       return;
@@ -458,7 +468,7 @@ export function createSurvivor(canvas, hooks) {
     ctx.fillRect(0, 0, W, H);
     ctx.strokeStyle = "rgba(110, 231, 183, 0.12)";
     ctx.lineWidth = 1;
-    const g = 48;
+    const g = 64;
     for (let x = 0; x <= W; x += g) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
@@ -545,13 +555,12 @@ export function createSurvivor(canvas, hooks) {
       ctx.fillStyle = "#e8ecf4";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(String(sec || 3), W / 2, H / 2);
+      ctx.fillText(String(Math.max(1, sec)), W / 2, H / 2);
     }
   }
 
   return {
     start() {
-      if (running) return;
       reset();
       startWaveSpawning();
       running = true;
@@ -560,8 +569,7 @@ export function createSurvivor(canvas, hooks) {
       raf = requestAnimationFrame(tick);
     },
     stop() {
-      running = false;
-      cancelAnimationFrame(raf);
+      halt();
     },
     reset,
     setKey(dir, down) {
