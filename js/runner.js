@@ -329,14 +329,14 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
       slidePointerHeld = false;
     }
     const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
-    const onGround = Math.abs(py + h - GROUND_Y) < 2 && vy >= -1;
+    const onGround = Math.abs(py + h - GROUND_Y) < 5 && vy >= -120;
     if (onGround) vy = JUMP_V;
   }
 
   function slideStart() {
     if (!running) return;
     const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
-    const onGround = Math.abs(py + h - GROUND_Y) < 2 && vy >= -1;
+    const onGround = Math.abs(py + h - GROUND_Y) < 5 && vy >= -120;
     if (!onGround) return;
     sliding = true;
     slideUntil = performance.now() + SLIDE_MIN_MS;
@@ -439,15 +439,8 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
         return;
       }
 
-      if (e.button === 0) {
-        e.preventDefault();
-        try {
-          canvas.setPointerCapture(e.pointerId);
-        } catch (_) {
-          /* ignore */
-        }
-        jump();
-      } else if (e.button === 2) {
+      // 左键：部分环境下 pointerdown 主键异常，改由 mousedown 处理（见下方）
+      if (e.button === 2) {
         e.preventDefault();
         try {
           canvas.setPointerCapture(e.pointerId);
@@ -457,6 +450,15 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
         slidePointerHeld = true;
         slideStart();
       }
+    };
+
+    /** 桌面端左键跳跃：mousedown 比 pointerdown 主键更稳定（Chrome/Safari 触控板等） */
+    const onMouseDown = (e) => {
+      if (!active() || !running) return;
+      if (e.button !== 0) return;
+      if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
+      e.preventDefault();
+      jump();
     };
 
     const onPointerUp = (e) => {
@@ -486,6 +488,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
     canvas.addEventListener("pointerup", onPointerUp, { passive: true });
     canvas.addEventListener("pointercancel", onPointerUp, { passive: true });
+    canvas.addEventListener("mousedown", onMouseDown, true);
 
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);
@@ -495,6 +498,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointercancel", onPointerUp);
+      canvas.removeEventListener("mousedown", onMouseDown, true);
     };
   }
 
