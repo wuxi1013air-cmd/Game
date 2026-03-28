@@ -101,7 +101,7 @@ main {
 }
 
 main {
-  max-width: 720px;
+  max-width: min(960px, 100%);
   margin: 0 auto;
   padding: 0 1.25rem 3rem;
 }
@@ -139,9 +139,15 @@ main {
   grid-template-columns: 1fr;
 }
 
-@media (min-width: 520px) {
+@media (min-width: 560px) {
   .game-cards {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 900px) {
+  .game-cards {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
@@ -264,72 +270,262 @@ main {
   color: var(--muted);
 }
 
-.memory-board {
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ms-diff select {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.ms-status-label {
+  font-family: var(--font-mono);
+  color: var(--danger);
+  min-height: 1.2em;
+}
+
+.ms-root {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.ms-board {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.6rem;
-  max-width: 400px;
+  gap: 2px;
+  width: max-content;
+  max-width: 100%;
   margin: 0 auto;
 }
 
-.memory-cell {
-  aspect-ratio: 1;
-  perspective: 600px;
-  border: none;
+.ms-cell {
+  width: clamp(22px, 4.2vw, 28px);
+  height: clamp(22px, 4.2vw, 28px);
   padding: 0;
-  background: transparent;
+  border: none;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: clamp(0.65rem, 2.8vw, 0.85rem);
+  font-weight: 700;
   cursor: pointer;
-  font: inherit;
-}
-
-.memory-cell:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 8px;
-}
-
-.memory-cell-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: 10px;
-  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-  transform-style: preserve-3d;
-}
-
-.memory-cell.flipped .memory-cell-inner,
-.memory-cell.matched .memory-cell-inner {
-  transform: rotateY(180deg);
-}
-
-.memory-face {
-  position: absolute;
-  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  backface-visibility: hidden;
+}
+
+.ms-cell:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.ms-cell.covered {
+  background: linear-gradient(180deg, #c0c0c0 0%, #808080 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.ms-cell.covered:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.ms-cell.flagged {
+  background: linear-gradient(180deg, #b45309 0%, #78350f 100%);
+}
+
+.ms-cell.open {
+  background: #c6c6c6;
+  color: #111;
+  cursor: default;
+}
+
+.ms-cell.open[data-n="1"] {
+  color: #0000f0;
+}
+.ms-cell.open[data-n="2"] {
+  color: #008200;
+}
+.ms-cell.open[data-n="3"] {
+  color: #f00000;
+}
+.ms-cell.open[data-n="4"] {
+  color: #000084;
+}
+.ms-cell.open[data-n="5"] {
+  color: #840000;
+}
+.ms-cell.open[data-n="6"] {
+  color: #008284;
+}
+.ms-cell.open[data-n="7"] {
+  color: #000000;
+}
+.ms-cell.open[data-n="8"] {
+  color: #848484;
+}
+
+.ms-cell.mine {
+  background: #f87171;
+  color: #1f0000;
+}
+
+.pinball-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+#pinball-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
-  font-size: 1.75rem;
+  box-shadow: var(--shadow);
 }
 
-.memory-face.back {
-  background: linear-gradient(145deg, var(--card-back), #12161f);
-  color: var(--accent);
+.solitaire {
+  width: 100%;
+}
+
+.sol-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.sol-stock-waste {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.sol-foundations {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.sol-pile {
+  width: 3rem;
+  height: 4.2rem;
+  border-radius: 6px;
+  border: 1px dashed var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 24, 36, 0.6);
+}
+
+.sol-pile.sol-stock {
+  cursor: pointer;
+  border-style: solid;
+  background: linear-gradient(145deg, #1e3a2f, #0f172a);
+}
+
+.sol-pile.sol-stock.has-cards::after {
+  content: "🂠";
+  font-size: 1.4rem;
+  opacity: 0.5;
+}
+
+.sol-pile.sol-waste {
+  border-style: solid;
+}
+
+.sol-foundation {
+  cursor: pointer;
+}
+
+.sol-tableau {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+  align-items: start;
+}
+
+.sol-column {
+  min-height: 5rem;
+  border-radius: 6px;
+  padding: 0.15rem;
+}
+
+.sol-card-wrap {
+  position: relative;
+}
+
+.sol-card {
+  width: 100%;
+  max-width: 3rem;
+  height: 4.2rem;
+  margin: 0 auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   font-weight: 700;
+  line-height: 1.1;
+  cursor: pointer;
+  user-select: none;
+  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  color: #0f172a;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
-.memory-face.front {
-  background: var(--bg-panel);
-  transform: rotateY(180deg);
+.sol-card.red {
+  color: #b91c1c;
 }
 
-.memory-cell.matched .memory-face.front {
-  border-color: var(--accent-dim);
-  box-shadow: 0 0 0 1px rgba(110, 231, 183, 0.35);
+.sol-card.black {
+  color: #0f172a;
+}
+
+.sol-card.face-down {
+  background: linear-gradient(145deg, #1d4ed8, #1e3a8a);
+  cursor: pointer;
+}
+
+.sol-card.face-down::after {
+  content: "✦";
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.sol-card.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.sol-suit {
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
 .site-footer {

@@ -1,6 +1,6 @@
 # Mini Arcade · 迷你游戏站
 
-纯静态页面：贪吃蛇、记忆翻牌。可直接托管在 **GitHub Pages**，无需构建。
+纯静态页面：扫雷、弹珠台、纸牌（克朗代克）、贪吃蛇。可直接托管在 **GitHub Pages**，无需构建。
 
 ## 本地预览
 
@@ -42,9 +42,11 @@ git push -u origin main
 mini-games-site/
 ├── index.html
 ├── css/style.css
-├── js/app.js      # 路由与 UI
+├── js/app.js
 ├── js/snake.js
-└── js/memory.js
+├── js/minesweeper.js
+├── js/pinball.js
+└── js/solitaire.js
 ```
 
 ## 许可

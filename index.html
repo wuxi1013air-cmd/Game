@@ -19,24 +19,82 @@
       <span class="logo-icon">◆</span>
       <span>Mini Arcade</span>
     </div>
-    <p class="tagline">在浏览器里玩两把 · 纯前端 · 可部署 GitHub Pages</p>
+    <p class="tagline">扫雷 · 弹珠台 · 纸牌 · 贪吃蛇 · 纯前端 GitHub Pages</p>
   </header>
 
   <main>
     <section id="view-home" class="view active">
       <h1 class="hero-title">选一款游戏</h1>
       <div class="game-cards">
+        <button type="button" class="game-card" data-game="minesweeper">
+          <span class="card-emoji">💣</span>
+          <span class="card-name">扫雷</span>
+          <span class="card-desc">左键翻开，右键标记；Shift+左键也可标记</span>
+        </button>
+        <button type="button" class="game-card" data-game="pinball">
+          <span class="card-emoji">🔮</span>
+          <span class="card-name">三维弹珠</span>
+          <span class="card-desc">Z / ← 左挡，M / → 右挡，撞缓冲器得分</span>
+        </button>
+        <button type="button" class="game-card" data-game="solitaire">
+          <span class="card-emoji">🃏</span>
+          <span class="card-name">纸牌</span>
+          <span class="card-desc">克朗代克接龙：双击可试收上排</span>
+        </button>
         <button type="button" class="game-card" data-game="snake">
           <span class="card-emoji">🐍</span>
           <span class="card-name">贪吃蛇</span>
-          <span class="card-desc">方向键移动，别撞墙和自己</span>
-        </button>
-        <button type="button" class="game-card" data-game="memory">
-          <span class="card-emoji">🎴</span>
-          <span class="card-name">记忆翻牌</span>
-          <span class="card-desc">找出所有相同图案配对</span>
+          <span class="card-desc">方向键或 WASD</span>
         </button>
       </div>
+    </section>
+
+    <section id="view-minesweeper" class="view">
+      <div class="game-toolbar">
+        <button type="button" class="btn ghost" data-back>← 返回</button>
+        <div class="stats">
+          <span>剩余雷 <strong id="ms-remaining">0</strong></span>
+          <span id="ms-status" class="ms-status-label"></span>
+        </div>
+        <div class="toolbar-actions">
+          <label class="ms-diff">
+            <span class="visually-hidden">难度</span>
+            <select id="ms-difficulty" aria-label="难度">
+              <option value="beginner">初级 9×9</option>
+              <option value="intermediate" selected>中级 16×14</option>
+            </select>
+          </label>
+          <button type="button" class="btn" id="ms-restart">新局</button>
+        </div>
+      </div>
+      <div id="ms-root" class="ms-root" aria-live="polite"></div>
+      <p class="hint">左键点已翻开的数字：若周围旗数等于该数字，会翻开其余相邻格</p>
+    </section>
+
+    <section id="view-pinball" class="view">
+      <div class="game-toolbar">
+        <button type="button" class="btn ghost" data-back>← 返回</button>
+        <div class="stats">
+          <span>分数 <strong id="pb-score">0</strong></span>
+          <span>球 <strong id="pb-balls">3</strong></span>
+        </div>
+        <button type="button" class="btn" id="pb-restart">重来</button>
+      </div>
+      <div class="pinball-wrap">
+        <canvas id="pinball-canvas" width="380" height="520" aria-label="弹珠台"></canvas>
+        <p class="hint">立体风格桌面 · Z / ← 左挡板 · M / → 右挡板</p>
+      </div>
+    </section>
+
+    <section id="view-solitaire" class="view view-wide">
+      <div class="game-toolbar">
+        <button type="button" class="btn ghost" data-back>← 返回</button>
+        <div class="stats">
+          <span>纸牌接龙</span>
+        </div>
+        <button type="button" class="btn" id="sol-restart">洗牌重开</button>
+      </div>
+      <div id="sol-root"></div>
     </section>
 
     <section id="view-snake" class="view">
@@ -53,18 +111,6 @@
         <p class="hint">使用 ↑ ↓ ← → 或 WASD 控制</p>
       </div>
     </section>
-
-    <section id="view-memory" class="view">
-      <div class="game-toolbar">
-        <button type="button" class="btn ghost" data-back>← 返回</button>
-        <div class="stats">
-          <span>步数 <strong id="memory-moves">0</strong></span>
-          <span>配对 <strong id="memory-pairs">0 / 8</strong></span>
-        </div>
-        <button type="button" class="btn" id="memory-restart">洗牌重来</button>
-      </div>
-      <div id="memory-board" class="memory-board" role="grid" aria-label="记忆翻牌"></div>
-    </section>
   </main>
 
   <footer class="site-footer">
@@ -73,7 +119,7 @@
 
   <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
     <div class="overlay-card">
-      <h2 id="overlay-title">游戏结束</h2>
+      <h2 id="overlay-title">提示</h2>
       <p id="overlay-msg"></p>
       <button type="button" class="btn" id="overlay-dismiss">知道了</button>
     </div>
