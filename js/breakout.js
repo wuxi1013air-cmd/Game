@@ -568,6 +568,18 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
     draw();
   }
 
+  /** 下一关：保留得分与生命，重随机砖块，球贴挡板待发 */
+  function nextLevel() {
+    stop();
+    paddleX = W / 2 - PADDLE_W / 2;
+    balls = [];
+    launched = false;
+    powerUps = [];
+    buildBricks();
+    syncHud();
+    draw();
+  }
+
   function launchBall() {
     if (!running || launched) return;
     const h = heldBallPos();
@@ -596,5 +608,5 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
 
   reset();
 
-  return { reset, start, stop, setPaddleFromClientX, launchBall };
+  return { reset, nextLevel, start, stop, setPaddleFromClientX, launchBall };
 }

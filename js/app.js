@@ -29,8 +29,23 @@ function showOverlay(title, msg) {
   overlay.classList.remove("hidden");
 }
 
+/** 打砖块过关弹窗关闭后是否进入下一关（需在 createBreakout 之后赋值 ref） */
+let breakoutAdvanceAfterOverlay = false;
+let breakoutApiRef = null;
+
 function hideOverlay() {
   overlay.classList.add("hidden");
+  if (
+    breakoutAdvanceAfterOverlay &&
+    views.breakout.classList.contains("active") &&
+    breakoutApiRef
+  ) {
+    breakoutAdvanceAfterOverlay = false;
+    breakoutApiRef.nextLevel();
+    breakoutApiRef.start();
+  } else {
+    breakoutAdvanceAfterOverlay = false;
+  }
 }
 
 overlayDismiss.addEventListener("click", hideOverlay);
@@ -40,6 +55,7 @@ overlay.addEventListener("click", (e) => {
 
 document.querySelectorAll("[data-back]").forEach((btn) => {
   btn.addEventListener("click", () => {
+    breakoutAdvanceAfterOverlay = false;
     hideOverlay();
     const sm = document.getElementById("sol-score-modal");
     if (sm) {
@@ -106,14 +122,17 @@ const breakoutApi = createBreakout(breakoutCanvas, {
     breakoutLivesEl.textContent = String(n);
   },
   onWin: (final) => {
-    showOverlay("过关", `清完砖块！得分 ${final}。`);
+    breakoutAdvanceAfterOverlay = true;
+    showOverlay("过关", `清完砖块！本关得分累计 ${final}。点「知道了」进入下一关。`);
   },
   onLose: (final) => {
     showOverlay("游戏结束", `生命用尽。得分 ${final}。`);
   },
 });
+breakoutApiRef = breakoutApi;
 
 document.getElementById("breakout-restart").addEventListener("click", () => {
+  breakoutAdvanceAfterOverlay = false;
   hideOverlay();
   breakoutApi.reset();
   breakoutApi.start();
@@ -274,6 +293,7 @@ document.querySelectorAll(".game-card").forEach((card) => {
       showView("solitaire");
       solitaireApi.reset();
     } else if (game === "breakout") {
+      breakoutAdvanceAfterOverlay = false;
       showView("breakout");
       breakoutApi.reset();
       breakoutApi.start();
