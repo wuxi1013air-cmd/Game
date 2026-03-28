@@ -9,6 +9,8 @@ const SCORE_RECYCLE = -20;
 const DRAG_THRESHOLD = 6;
 const STACK_GAP = 28;
 const BEST_KEY = "mini-arcade-solitaire-best";
+const SUIT_NAMES = ["黑桃", "红心", "方块", "梅花"];
+const DRAG_SMOOTH = 0.34;
 
 function isRed(suit) {
   return suit === 1 || suit === 2;
@@ -50,7 +52,7 @@ function saveBest(n) {
   localStorage.setItem(BEST_KEY, String(n));
 }
 
-export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => false }) {
+export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => false, dragHudEl = null }) {
   let stock = [];
   let waste = [];
   let foundations = [[], [], [], []];
@@ -233,6 +235,34 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
     const g = document.createElement("div");
     g.className = "sol-drag-ghost";
     g.style.pointerEvents = "none";
+
+    let tx = clientX - offX;
+    let ty = clientY - offY;
+    let lx = tx;
+    let ly = ty;
+    let rafId = 0;
+    let alive = true;
+
+    function tick() {
+      if (!alive) return;
+      lx += (tx - lx) * DRAG_SMOOTH;
+      ly += (ty - ly) * DRAG_SMOOTH;
+      g.style.transform = `translate3d(${lx}px, ${ly}px, 0)`;
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function move(cx, cy) {
+      tx = cx - offX;
+      ty = cy - offY;
+      if (!rafId) rafId = requestAnimationFrame(tick);
+    }
+
+    function stopRaf() {
+      alive = false;
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+
     cards.forEach((c, i) => {
       const shell = document.createElement("div");
       shell.className = "sol-drag-layer";
@@ -240,13 +270,80 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
       shell.innerHTML = c.faceUp ? buildCardFaceHTML(c) : '<div class="sol-card sol-card--poker sol-card--back"></div>';
       g.append(shell);
     });
+
     document.body.append(g);
-    const move = (x, y) => {
-      g.style.left = `${x - offX}px`;
-      g.style.top = `${y - offY}px`;
-    };
-    move(clientX, clientY);
-    return { el: g, move };
+    g.style.transform = `translate3d(${lx}px, ${ly}px, 0)`;
+    rafId = requestAnimationFrame(tick);
+
+    return { el: g, move, stopRaf };
+  }
+
+  function clearDragHud() {
+    if (!dragHudEl) return;
+    dragHudEl.textContent = "";
+    dragHudEl.classList.add("hidden");
+    dragHudEl.classList.remove("is-valid", "is-bad");
+    dragHudEl.setAttribute("aria-hidden", "true");
+  }
+
+  function setDragHud(text, variant) {
+    if (!dragHudEl) return;
+    if (!text) {
+      clearDragHud();
+      return;
+    }
+    dragHudEl.textContent = text;
+    dragHudEl.classList.remove("hidden", "is-valid", "is-bad");
+    dragHudEl.setAttribute("aria-hidden", "false");
+    if (variant === "valid") dragHudEl.classList.add("is-valid");
+    else if (variant === "bad") dragHudEl.classList.add("is-bad");
+  }
+
+  function describePlacement(hit, src) {
+    const n = src.cards.length;
+    if (!hit) {
+      return { text: `${n} 张 · 未对准接牌槽 · 松手取消`, variant: "neutral" };
+    }
+    const drop = hit.code;
+    if (drop.startsWith("F")) {
+      const fi = Number(drop.slice(1));
+      if (Number.isNaN(fi)) {
+        return { text: `${n} 张 · 未知区域`, variant: "bad" };
+      }
+      const name = SUIT_NAMES[fi] ?? "花色";
+      if (src.cards.length !== 1) {
+        return { text: `${n} 张 · ${name} 收牌区（仅单张）`, variant: "bad" };
+      }
+      const c = src.cards[0];
+      if (!canPlaceOnFoundation(fi, c)) {
+        return { text: `${n} 张 · ${name} 收牌区 · 不可放置`, variant: "bad" };
+      }
+      return { text: `${n} 张 · ${name} 收牌区 · 可放置`, variant: "valid" };
+    }
+    if (drop.startsWith("T")) {
+      const col = Number(drop.slice(1));
+      if (Number.isNaN(col)) {
+        return { text: `${n} 张 · 未知列`, variant: "bad" };
+      }
+      const label = `第 ${col + 1} 列`;
+      if (src.from === "tableau" && src.col === col) {
+        return { text: `${n} 张 · ${label}（当前列）`, variant: "bad" };
+      }
+      if (!canPlaceOnTableau(col, src.cards)) {
+        return { text: `${n} 张 · ${label} · 不可叠放`, variant: "bad" };
+      }
+      return { text: `${n} 张 · ${label} · 可叠放`, variant: "valid" };
+    }
+    return { text: `${n} 张 · 无效区域`, variant: "bad" };
+  }
+
+  function updateDragHud(clientX, clientY) {
+    if (!dragHudEl || !drag || drag.pending || !drag.ghost) return;
+    const hit = findDropTargetEl(clientX, clientY);
+    const { text, variant } = describePlacement(hit, drag.src);
+    const ax = Math.round(clientX - drag.offX);
+    const ay = Math.round(clientY - drag.offY);
+    setDragHud(`牌组位置 左上角 (${ax}, ${ay}) px ｜ ${text}`, variant);
   }
 
   function findDropTargetEl(x, y) {
@@ -264,21 +361,26 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
   function startDrag(src, clientX, clientY, offX, offY, sourceEls) {
     drag = {
       src,
+      offX,
+      offY,
       ghost: makeDragGhost(src.cards, clientX, clientY, offX, offY),
       sourceEls,
     };
     sourceEls.forEach((el) => {
       el.style.opacity = "0.3";
     });
+    updateDragHud(clientX, clientY);
   }
 
   function endDrag() {
     if (!drag) return;
+    if (drag.ghost?.stopRaf) drag.ghost.stopRaf();
     if (drag.ghost?.el) drag.ghost.el.remove();
     const els = drag.sourceEls || drag.pending?.sourceEls;
     els?.forEach((el) => {
       el.style.opacity = "";
     });
+    clearDragHud();
     drag = null;
   }
 
@@ -292,10 +394,12 @@ export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => 
         drag.pending = null;
         startDrag(p.src, e.clientX, e.clientY, p.offX, p.offY, p.sourceEls);
         drag.ghost.move(e.clientX, e.clientY);
+        updateDragHud(e.clientX, e.clientY);
       }
       return;
     }
     drag.ghost.move(e.clientX, e.clientY);
+    updateDragHud(e.clientX, e.clientY);
   }
 
   function onGlobalPointerUp(e) {

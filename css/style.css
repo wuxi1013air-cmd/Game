@@ -723,13 +723,48 @@ main {
   color: rgba(255, 255, 255, 0.2);
 }
 
+.sol-drag-hud {
+  margin: 0 0 0.65rem;
+  min-height: 2.25rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(12, 14, 20, 0.88);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+  font-family: var(--font-mono);
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.sol-drag-hud.hidden {
+  display: none;
+}
+
+.sol-drag-hud.is-valid {
+  border-color: rgba(110, 231, 183, 0.65);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(110, 231, 183, 0.2);
+}
+
+.sol-drag-hud.is-bad {
+  border-color: rgba(248, 113, 113, 0.7);
+  color: #fca5a5;
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.15);
+}
+
 .sol-drag-ghost {
   position: fixed;
   z-index: 10000;
   left: 0;
   top: 0;
   pointer-events: none;
-  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.45));
+  will-change: transform;
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.48));
 }
 
 .sol-drag-layer {
