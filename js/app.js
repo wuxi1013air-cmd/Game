@@ -1,4 +1,5 @@
 import { createSnakeGame } from "./snake.js";
+import { createRunner } from "./runner.js";
 import { createMinesweeper } from "./minesweeper.js";
 import { createSolitaire } from "./solitaire.js";
 import { createBreakout } from "./breakout.js";
@@ -7,6 +8,7 @@ import { createGame2048 } from "./game2048.js";
 const views = {
   home: document.getElementById("view-home"),
   snake: document.getElementById("view-snake"),
+  runner: document.getElementById("view-runner"),
   minesweeper: document.getElementById("view-minesweeper"),
   solitaire: document.getElementById("view-solitaire"),
   breakout: document.getElementById("view-breakout"),
@@ -65,6 +67,7 @@ document.querySelectorAll("[data-back]").forEach((btn) => {
       sm.setAttribute("aria-hidden", "true");
     }
     snakeApi.stop();
+    runnerApi.stop();
     breakoutApi.stop();
     showView("home");
   });
@@ -110,6 +113,27 @@ window.addEventListener("keydown", (e) => {
   if (!m) return;
   e.preventDefault();
   snakeApi.setDirection(m[0], m[1]);
+});
+
+const runnerScoreEl = document.getElementById("runner-score");
+const runnerBestEl = document.getElementById("runner-best");
+const runnerCanvas = document.getElementById("runner-canvas");
+
+const runnerApi = createRunner(runnerCanvas, {
+  isActive: () => views.runner.classList.contains("active"),
+  onScore: (n) => {
+    runnerScoreEl.textContent = String(n);
+  },
+  onGameOver: (final) => {
+    showOverlay("撞上了", `本局得分 ${final}。空格跳跃，↓ 或 S 滑铲。`);
+  },
+  getBestEl: runnerBestEl,
+});
+
+document.getElementById("runner-restart").addEventListener("click", () => {
+  hideOverlay();
+  runnerApi.reset();
+  runnerApi.start();
 });
 
 const breakoutScoreEl = document.getElementById("breakout-score");
@@ -336,6 +360,10 @@ document.querySelectorAll(".game-card").forEach((card) => {
       showView("snake");
       snakeApi.reset();
       snakeApi.start();
+    } else if (game === "runner") {
+      showView("runner");
+      runnerApi.reset();
+      runnerApi.start();
     } else if (game === "minesweeper") {
       hideMsWinBar();
       hideMsLoseBar();

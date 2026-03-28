@@ -1,0 +1,423 @@
+/**
+ * 横版跑酷：白方块主角，跳跃 + 滑铲（下蹲压缩）。
+ * 障碍：地刺（须跳）、仙人掌（须跳）、低垂高墙（须滑铲通过）。
+ */
+
+const STORAGE_KEY = "mini-arcade-runner-best";
+
+const PLAYER_ANCHOR_X = 120;
+const RUN_W = 30;
+const RUN_H = 40;
+const SLIDE_W = 38;
+const SLIDE_H = 15;
+const GRAVITY = 2200;
+const JUMP_V = -620;
+const SLIDE_MIN_MS = 420;
+const SLIDE_ANIM_SPEED = 14;
+
+export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive }) {
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width;
+  const H = canvas.height;
+  const GROUND_Y = H - 52;
+  const SKY_TOP = 0;
+
+  let best = Number(localStorage.getItem(STORAGE_KEY)) || 0;
+  let running = false;
+  let raf = 0;
+  let lastT = 0;
+
+  let score = 0;
+  let distance = 0;
+  let gameSpeed = 280;
+  const speedCap = 520;
+  let speedGrow = 2.4;
+
+  /** @type {{ type: 'spike' | 'cactus' | 'wall'; x: number }[]} */
+  let obstacles = [];
+  /** 累计像素，归零时生成下一障碍 */
+  let spawnWait = 280;
+
+  let py = GROUND_Y - RUN_H;
+  let vy = 0;
+  /** 0 = 站立奔跑外形，1 = 完全滑铲外形 */
+  let slideMorph = 0;
+  let sliding = false;
+  let slideKeyHeld = false;
+  let slideUntil = 0;
+
+  function syncBest() {
+    if (getBestEl) getBestEl.textContent = String(best);
+  }
+
+  function playerHitbox() {
+    const w = RUN_W + (SLIDE_W - RUN_W) * slideMorph;
+    const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
+    const x = PLAYER_ANCHOR_X - w / 2;
+    const y = GROUND_Y - h;
+    return { x, y, w, h };
+  }
+
+  function aabbOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  function obstacleBox(obs) {
+    switch (obs.type) {
+      case "spike": {
+        const w = 34;
+        const h = 16;
+        return { x: obs.x, y: GROUND_Y - h, w, h };
+      }
+      case "cactus": {
+        const w = 24;
+        const h = 48;
+        return { x: obs.x + 2, y: GROUND_Y - h, w, h };
+      }
+      case "wall": {
+        const w = 44;
+        const h = 54;
+        return { x: obs.x, y: GROUND_Y - 72, w, h };
+      }
+      default:
+        return { x: obs.x, y: GROUND_Y, w: 0, h: 0 };
+    }
+  }
+
+  function rightmostObstacleEdge() {
+    let m = 0;
+    for (const o of obstacles) {
+      const b = obstacleBox(o);
+      m = Math.max(m, b.x + b.w);
+    }
+    return m;
+  }
+
+  function trySpawn(move) {
+    spawnWait -= move;
+    if (spawnWait > 0) return;
+    if (rightmostObstacleEdge() > W - 100) {
+      spawnWait = 50;
+      return;
+    }
+    const roll = Math.random();
+    let type;
+    if (roll < 0.28) type = "spike";
+    else if (roll < 0.62) type = "cactus";
+    else type = "wall";
+
+    obstacles.push({ type, x: W + 28 });
+    spawnWait = 240 + Math.random() * 220;
+  }
+
+  function die() {
+    running = false;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    if (score > best) {
+      best = score;
+      localStorage.setItem(STORAGE_KEY, String(best));
+      syncBest();
+    }
+    onGameOver(score);
+    draw();
+  }
+
+  function collides() {
+    const p = playerHitbox();
+    for (const obs of obstacles) {
+      if (aabbOverlap(p, obstacleBox(obs))) return true;
+    }
+    return false;
+  }
+
+  function update(dt) {
+    const t = Math.min(dt, 0.05);
+
+    const targetMorph = sliding ? 1 : 0;
+    slideMorph += (targetMorph - slideMorph) * (1 - Math.exp(-SLIDE_ANIM_SPEED * t));
+    if (Math.abs(slideMorph - targetMorph) < 0.01) slideMorph = targetMorph;
+
+    const hNow = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
+    const onGround = py + hNow >= GROUND_Y - 0.5 && vy >= -2;
+
+    if (onGround && sliding) {
+      vy = 0;
+      py = GROUND_Y - hNow;
+    } else {
+      vy += GRAVITY * t;
+      py += vy * t;
+      const hh = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
+      if (py + hh >= GROUND_Y) {
+        py = GROUND_Y - hh;
+        vy = 0;
+      }
+    }
+
+    const move = gameSpeed * t;
+    distance += move;
+    score = Math.floor(distance / 12);
+
+    for (const obs of obstacles) obs.x -= move;
+    obstacles = obstacles.filter((o) => o.x > -120);
+
+    gameSpeed = Math.min(speedCap, gameSpeed + speedGrow * t);
+
+    trySpawn(move);
+
+    const now = performance.now();
+    if (!slideKeyHeld && sliding && now >= slideUntil) sliding = false;
+
+    if (collides()) die();
+  }
+
+  function drawObstacle(obs) {
+    const b = obstacleBox(obs);
+    ctx.save();
+    if (obs.type === "spike") {
+      ctx.fillStyle = "#64748b";
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 1;
+      const n = 5;
+      const step = b.w / n;
+      for (let i = 0; i < n; i++) {
+        const sx = b.x + i * step;
+        ctx.beginPath();
+        ctx.moveTo(sx, GROUND_Y);
+        ctx.lineTo(sx + step / 2, b.y);
+        ctx.lineTo(sx + step, GROUND_Y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    } else if (obs.type === "cactus") {
+      ctx.fillStyle = "#15803d";
+      ctx.strokeStyle = "#166534";
+      fillRoundRect(ctx, b.x + 6, b.y + 8, 12, b.h - 8, 4);
+      ctx.strokeRect(b.x + 6, b.y + 8, 12, b.h - 8);
+      ctx.fillStyle = "#22c55e";
+      fillRoundRect(ctx, b.x, b.y + 18, 8, 10, 3);
+      fillRoundRect(ctx, b.x + b.w - 8, b.y + 22, 8, 12, 3);
+      fillRoundRect(ctx, b.x + 2, b.y + 6, 8, 8, 2);
+    } else {
+      ctx.fillStyle = "#475569";
+      ctx.strokeStyle = "#64748b";
+      ctx.lineWidth = 2;
+      fillRoundRect(ctx, b.x, b.y, b.w, b.h, 4);
+      ctx.strokeRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = "rgba(15, 23, 42, 0.45)";
+      ctx.fillRect(b.x + 4, b.y + 8, b.w - 8, 10);
+      ctx.fillStyle = "#fbbf24";
+      ctx.font = "10px JetBrains Mono, monospace";
+      ctx.fillText("↓铲", b.x + 8, b.y + 28);
+    }
+    ctx.restore();
+  }
+
+  function fillRoundRect(c, x, y, w, h, r) {
+    if (typeof c.roundRect === "function") {
+      c.beginPath();
+      c.roundRect(x, y, w, h, r);
+      c.fill();
+    } else {
+      c.fillRect(x, y, w, h);
+    }
+  }
+
+  function drawPlayer() {
+    const { x, y, w, h } = playerHitbox();
+    const squash = slideMorph;
+    ctx.save();
+    ctx.shadowColor = "rgba(255,255,255,0.35)";
+    ctx.shadowBlur = squash > 0.5 ? 6 : 10;
+    ctx.fillStyle = "#f8fafc";
+    fillRoundRect(ctx, x, y, w, h, Math.max(2, 5 - squash * 3));
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.5)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    if (squash > 0.15) {
+      ctx.fillStyle = "rgba(15, 23, 42, 0.2)";
+      ctx.fillRect(x + w * 0.15, y + h * 0.55, w * 0.7, h * 0.25);
+    }
+    ctx.restore();
+  }
+
+  function draw() {
+    const g = ctx.createLinearGradient(0, SKY_TOP, 0, GROUND_Y);
+    g.addColorStop(0, "#0f172a");
+    g.addColorStop(1, "#1e293b");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = "rgba(148, 163, 184, 0.15)";
+    for (let i = 0; i < 8; i++) {
+      const sx = ((i * 97 + (distance * 0.08) % 200) % (W + 40)) - 20;
+      ctx.fillRect(sx, 20 + (i * 17) % 60, 2, 2);
+    }
+
+    ctx.strokeStyle = "rgba(110, 231, 183, 0.25)";
+    ctx.lineWidth = 1;
+    const gridOff = distance % 40;
+    for (let gx = -gridOff; gx < W + 40; gx += 40) {
+      ctx.beginPath();
+      ctx.moveTo(gx, GROUND_Y + 4);
+      ctx.lineTo(gx - 30, H);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "#334155";
+    ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+    ctx.fillStyle = "#475569";
+    ctx.fillRect(0, GROUND_Y, W, 3);
+
+    for (const obs of obstacles) drawObstacle(obs);
+
+    drawPlayer();
+
+    ctx.fillStyle = "rgba(248, 250, 252, 0.08)";
+    ctx.font = "600 14px JetBrains Mono, Noto Sans SC, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(`速度 ${Math.round(gameSpeed)}`, W - 14, 24);
+    ctx.textAlign = "left";
+  }
+
+  function loop(now) {
+    if (!running) return;
+    if (!lastT) lastT = now;
+    const dt = (now - lastT) / 1000;
+    lastT = now;
+    update(dt);
+    onScore(score);
+    draw();
+    raf = requestAnimationFrame(loop);
+  }
+
+  function jump() {
+    if (!running) return;
+    if (sliding) {
+      sliding = false;
+      slideKeyHeld = false;
+    }
+    const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
+    const onGround = Math.abs(py + h - GROUND_Y) < 2 && vy >= -1;
+    if (onGround) vy = JUMP_V;
+  }
+
+  function slideStart(fromKey) {
+    if (!running) return;
+    const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
+    const onGround = Math.abs(py + h - GROUND_Y) < 2 && vy >= -1;
+    if (!onGround) return;
+    sliding = true;
+    if (fromKey) slideKeyHeld = true;
+    slideUntil = performance.now() + SLIDE_MIN_MS;
+    vy = 0;
+    const hh = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
+    py = GROUND_Y - hh;
+  }
+
+  function slideEnd() {
+    slideKeyHeld = false;
+  }
+
+  function reset() {
+    running = false;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    lastT = 0;
+    score = 0;
+    distance = 0;
+    gameSpeed = 280;
+    obstacles = [];
+    spawnWait = 320;
+    slideMorph = 0;
+    sliding = false;
+    slideKeyHeld = false;
+    vy = 0;
+    py = GROUND_Y - RUN_H;
+    syncBest();
+    onScore(0);
+    draw();
+  }
+
+  function start() {
+    if (running) return;
+    running = true;
+    lastT = 0;
+    raf = requestAnimationFrame(loop);
+  }
+
+  function stop() {
+    running = false;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+  }
+
+  function bindInput() {
+    const active = () => isActive && isActive();
+
+    const onKeyDown = (e) => {
+      if (!active() || !running) return;
+      if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") {
+        e.preventDefault();
+        jump();
+      }
+      if (e.code === "ArrowDown" || e.code === "KeyS") {
+        e.preventDefault();
+        slideStart(true);
+      }
+    };
+    const onKeyUp = (e) => {
+      if (!active()) return;
+      if (e.code === "ArrowDown" || e.code === "KeyS") {
+        e.preventDefault();
+        slideEnd();
+      }
+    };
+
+    const getTouchZone = (e) => {
+      const r = canvas.getBoundingClientRect();
+      const scaleY = canvas.height / r.height;
+      const cy = (e.clientY - r.top) * scaleY;
+      return cy < canvas.height * 0.52 ? "jump" : "slide";
+    };
+
+    const onPointerDown = (e) => {
+      if (!active() || !running) return;
+      if (getTouchZone(e) === "jump") jump();
+      else slideStart(false);
+    };
+
+    const onPointerUp = () => {
+      if (!active()) return;
+      slideEnd();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    canvas.addEventListener("pointerdown", onPointerDown, { passive: true });
+    canvas.addEventListener("pointerup", onPointerUp, { passive: true });
+    canvas.addEventListener("pointercancel", onPointerUp, { passive: true });
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerUp);
+    };
+  }
+
+  const unbind = bindInput();
+  reset();
+
+  return {
+    reset,
+    start,
+    stop,
+    destroy() {
+      stop();
+      unbind();
+    },
+  };
+}

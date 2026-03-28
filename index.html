@@ -19,7 +19,7 @@
       <span class="logo-icon">◆</span>
       <span>Mini Arcade</span>
     </div>
-    <p class="tagline">扫雷 · 纸牌 · 贪吃蛇 · 打砖块 · 2048 · 纯前端 GitHub Pages</p>
+    <p class="tagline">扫雷 · 纸牌 · 贪吃蛇 · 跑酷 · 打砖块 · 2048 · 纯前端 GitHub Pages</p>
   </header>
 
   <main>
@@ -40,6 +40,11 @@
           <span class="card-emoji">🐍</span>
           <span class="card-name">贪吃蛇</span>
           <span class="card-desc">方向键或 WASD</span>
+        </button>
+        <button type="button" class="game-card" data-game="runner">
+          <span class="card-emoji">⬜</span>
+          <span class="card-name">方块跑酷</span>
+          <span class="card-desc">跳跃 / 滑铲过矮洞；地刺与仙人掌要跳</span>
         </button>
         <button type="button" class="game-card" data-game="breakout">
           <span class="card-emoji">🧱</span>
@@ -108,6 +113,20 @@
       </div>
       <div class="snake-wrap">
         <canvas id="snake-canvas" width="400" height="400" aria-label="贪吃蛇游戏区域"></canvas>
+      </div>
+    </section>
+
+    <section id="view-runner" class="view">
+      <div class="game-toolbar">
+        <button type="button" class="btn ghost" data-back>← 返回</button>
+        <div class="stats">
+          <span>得分 <strong id="runner-score">0</strong></span>
+          <span>最佳 <strong id="runner-best">0</strong></span>
+        </div>
+        <button type="button" class="btn" id="runner-restart">重新开始</button>
+      </div>
+      <div class="runner-wrap">
+        <canvas id="runner-canvas" width="640" height="280" aria-label="方块跑酷" tabindex="0"></canvas>
       </div>
     </section>
 
