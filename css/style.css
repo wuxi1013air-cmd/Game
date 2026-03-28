@@ -294,6 +294,10 @@ main {
   gap: 1rem;
 }
 
+#view-runner:focus {
+  outline: none;
+}
+
 #runner-canvas {
   display: block;
   max-width: 100%;
@@ -305,6 +309,11 @@ main {
   touch-action: none;
   cursor: pointer;
   user-select: none;
+}
+
+#runner-canvas:focus,
+#runner-canvas:focus-visible {
+  outline: none;
 }
 
 .breakout-wrap {

@@ -116,7 +116,7 @@
       </div>
     </section>
 
-    <section id="view-runner" class="view">
+    <section id="view-runner" class="view" tabindex="-1">
       <div class="game-toolbar">
         <button type="button" class="btn ghost" data-back>← 返回</button>
         <div class="stats">
@@ -126,9 +126,9 @@
         <button type="button" class="btn" id="runner-restart">重新开始</button>
       </div>
       <div class="runner-layout">
-        <p class="runner-hint">操作：<strong>↑</strong> 跳跃 · <strong>↓</strong> 滑铲（按住保持趴低）</p>
+        <p class="runner-hint">操作：<strong>↑</strong> 或 <strong>空格</strong> 跳跃 · <strong>↓</strong> 滑铲（按住趴低）；点一下游戏区可确保按键生效</p>
         <div class="runner-wrap">
-          <canvas id="runner-canvas" width="640" height="280" aria-label="方块跑酷" tabindex="0"></canvas>
+          <canvas id="runner-canvas" width="640" height="280" aria-label="方块跑酷"></canvas>
         </div>
         <div id="runner-lose-bar" class="ms-lose-bar hidden" aria-hidden="true">
           <p class="ms-lose-bar__text">你输了！</p>

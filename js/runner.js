@@ -1,5 +1,5 @@
 /**
- * 横版跑酷：↑ 跳、↓ 滑铲；趴下/起身速度由 SLIDE_ANIM_SPEED 控制。
+ * 横版跑酷：↑ 跳、↓ 滑铲；起身比趴下更快（SLIDE_STAND_RATE）。
  * 地刺 / 仙人掌：碰到即死。高墙仅上部实体；正面顶墙左推；洞下松铲起身判输。
  */
 
@@ -13,8 +13,10 @@ const SLIDE_H = 15;
 const GRAVITY = 2200;
 const JUMP_V = -620;
 const SLIDE_MIN_MS = 420;
-/** 越大趴下/起身越快 */
-const SLIDE_ANIM_SPEED = 52;
+/** 趴下形变速率（越大越快） */
+const SLIDE_CROUCH_RATE = 56;
+/** 起身恢复更快 */
+const SLIDE_STAND_RATE = 104;
 /** 离地后仍可起跳的宽限（秒） */
 const COYOTE_TIME = 0.11;
 /** 低于此视为「起身」，高墙洞内与实体重叠则判输 */
@@ -169,7 +171,9 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl }) {
     const t = Math.min(dt, 0.05);
 
     const targetMorph = sliding ? 1 : 0;
-    slideMorph += (targetMorph - slideMorph) * (1 - Math.exp(-SLIDE_ANIM_SPEED * t));
+    const towardCrouch = targetMorph > slideMorph;
+    const slideK = towardCrouch ? SLIDE_CROUCH_RATE : SLIDE_STAND_RATE;
+    slideMorph += (targetMorph - slideMorph) * (1 - Math.exp(-slideK * t));
     if (Math.abs(slideMorph - targetMorph) < 0.01) slideMorph = targetMorph;
 
     const hNow = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
@@ -367,7 +371,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl }) {
   function canStandOnGround() {
     const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
     const feet = py + h;
-    return feet >= GROUND_Y - 22 && feet <= GROUND_Y + 14 && vy >= -400;
+    return feet >= GROUND_Y - 28 && feet <= GROUND_Y + 18 && vy >= -500;
   }
 
   function tryJump() {
@@ -376,10 +380,14 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl }) {
       sliding = false;
       slideKeyHeld = false;
     }
-    if (canStandOnGround() || coyoteRemain > 0) {
-      vy = JUMP_V;
-      coyoteRemain = 0;
-    }
+    const h = RUN_H + (SLIDE_H - RUN_H) * slideMorph;
+    const feet = py + h;
+    const inAir = feet < GROUND_Y - 8;
+    if (inAir && coyoteRemain <= 0) return;
+    if (inAir && vy < -55) return;
+    if (feet > GROUND_Y + 24) return;
+    vy = JUMP_V;
+    coyoteRemain = 0;
   }
 
   function slideStart() {

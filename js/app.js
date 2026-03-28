@@ -152,16 +152,26 @@ const arrowDownKey = (e) =>
   e.code === "ArrowDown" ||
   e.key === "ArrowDown" ||
   e.keyCode === 40;
+const jumpKey = (e) => arrowUpKey(e) || e.code === "Space" || e.key === " ";
+
+views.runner.querySelector(".runner-layout")?.addEventListener(
+  "pointerdown",
+  (e) => {
+    if (!views.runner.classList.contains("active")) return;
+    if (e.target.closest("button")) return;
+    views.runner.focus({ preventScroll: true });
+  },
+  true,
+);
 
 window.addEventListener(
   "keydown",
   (e) => {
     if (!views.runner.classList.contains("active")) return;
-    if (!arrowUpKey(e) && !arrowDownKey(e)) return;
-    // 必须先拦截默认行为：否则 ↑ 会滚动页面或移动焦点（用户看到整页在闪）
+    if (!jumpKey(e) && !arrowDownKey(e)) return;
     e.preventDefault();
     if (!runnerApi.isRunning()) return;
-    if (arrowUpKey(e)) {
+    if (jumpKey(e)) {
       if (e.repeat) return;
       runnerApi.tryJump();
       return;
@@ -187,7 +197,7 @@ function runnerBeginPlay() {
   hideRunnerLoseBar();
   runnerApi.reset();
   runnerApi.start();
-  runnerCanvas.focus({ preventScroll: true });
+  views.runner.focus({ preventScroll: true });
 }
 
 document.getElementById("runner-restart").addEventListener("click", () => {
@@ -427,7 +437,7 @@ document.querySelectorAll(".game-card").forEach((card) => {
       hideRunnerLoseBar();
       runnerApi.reset();
       runnerApi.start();
-      runnerCanvas.focus({ preventScroll: true });
+      views.runner.focus({ preventScroll: true });
     } else if (game === "minesweeper") {
       hideMsWinBar();
       hideMsLoseBar();
