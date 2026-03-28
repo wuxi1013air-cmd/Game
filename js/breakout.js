@@ -67,8 +67,7 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
   }
 
   /**
-   * 随机布局：可破坏砖稀疏/随机填充 + 钢砖围墙（缺口仅在上边 / 下边 / 上下同时；
-   * 缺口为连续随机宽度，且不在围墙矩形四角）+ 少量散落钢砖。
+   * 随机布局：可破坏砖稀疏/随机填充 + 钢砖围墙（缺口只在**上边**、随机宽度且不在四角）+ 少量散落钢砖。
    */
   function buildBricks() {
     const list = [];
@@ -127,23 +126,15 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
 
         const span = ringRight - ringLeft - 1;
         if (span >= 1) {
-          const mode = Math.random();
-          if (mode < 1 / 3) {
-            addGapCells(randomGapOnHorizontalEdge(ringTop));
-          } else if (mode < 2 / 3) {
-            addGapCells(randomGapOnHorizontalEdge(ringBot));
-          } else {
-            addGapCells(randomGapOnHorizontalEdge(ringTop));
-            addGapCells(randomGapOnHorizontalEdge(ringBot));
-          }
+          addGapCells(randomGapOnHorizontalEdge(ringTop));
         }
 
         if (gapKeys.size === 0) {
-          const onTB = ringCells.filter(([r]) => r === ringTop || r === ringBot);
-          const nonCorners = onTB.filter(
+          const onTop = ringCells.filter(([r]) => r === ringTop);
+          const nonCorners = onTop.filter(
             ([r, c]) => c > ringLeft && c < ringRight,
           );
-          const pool = nonCorners.length > 0 ? nonCorners : onTB;
+          const pool = nonCorners.length > 0 ? nonCorners : onTop;
           if (pool.length > 0) {
             const pick = pool[Math.floor(Math.random() * pool.length)];
             gapKeys.add(cellKey(pick[0], pick[1]));
