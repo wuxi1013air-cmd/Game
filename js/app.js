@@ -1,5 +1,4 @@
 import { createSnakeGame } from "./snake.js";
-import { createRunner } from "./runner.js";
 import { createMinesweeper } from "./minesweeper.js";
 import { createSolitaire } from "./solitaire.js";
 import { createBreakout } from "./breakout.js";
@@ -8,7 +7,6 @@ import { createGame2048 } from "./game2048.js";
 const views = {
   home: document.getElementById("view-home"),
   snake: document.getElementById("view-snake"),
-  runner: document.getElementById("view-runner"),
   minesweeper: document.getElementById("view-minesweeper"),
   solitaire: document.getElementById("view-solitaire"),
   breakout: document.getElementById("view-breakout"),
@@ -61,14 +59,12 @@ document.querySelectorAll("[data-back]").forEach((btn) => {
     hideOverlay();
     hideMsWinBar();
     hideMsLoseBar();
-    hideRunnerLoseBar();
     const sm = document.getElementById("sol-score-modal");
     if (sm) {
       sm.classList.add("hidden");
       sm.setAttribute("aria-hidden", "true");
     }
     snakeApi.stop();
-    runnerApi.stop();
     breakoutApi.stop();
     showView("home");
   });
@@ -114,108 +110,6 @@ window.addEventListener("keydown", (e) => {
   if (!m) return;
   e.preventDefault();
   snakeApi.setDirection(m[0], m[1]);
-});
-
-const RUNNER_AUTO_JUMP_KEY = "mini-arcade-runner-auto-jump";
-
-const runnerScoreEl = document.getElementById("runner-score");
-const runnerBestEl = document.getElementById("runner-best");
-const runnerCanvas = document.getElementById("runner-canvas");
-const runnerLoseBar = document.getElementById("runner-lose-bar");
-const runnerAutoJumpEl = document.getElementById("runner-auto-jump");
-if (runnerAutoJumpEl) {
-  runnerAutoJumpEl.checked = localStorage.getItem(RUNNER_AUTO_JUMP_KEY) === "1";
-  runnerAutoJumpEl.addEventListener("change", () => {
-    localStorage.setItem(RUNNER_AUTO_JUMP_KEY, runnerAutoJumpEl.checked ? "1" : "0");
-  });
-}
-
-function hideRunnerLoseBar() {
-  if (!runnerLoseBar) return;
-  runnerLoseBar.classList.add("hidden");
-  runnerLoseBar.setAttribute("aria-hidden", "true");
-}
-
-function showRunnerLoseBar() {
-  if (!runnerLoseBar) return;
-  runnerLoseBar.classList.remove("hidden");
-  runnerLoseBar.setAttribute("aria-hidden", "false");
-}
-
-const runnerApi = createRunner(runnerCanvas, {
-  onScore: (n) => {
-    runnerScoreEl.textContent = String(n);
-  },
-  onGameOver: () => {
-    showRunnerLoseBar();
-  },
-  getBestEl: runnerBestEl,
-  isAutoJumpEnabled: () => Boolean(runnerAutoJumpEl?.checked),
-});
-
-/** 含部分环境对方向键的兼容（避免未拦截时页面滚动/焦点移动「发光」） */
-const arrowUpKey = (e) =>
-  e.code === "ArrowUp" ||
-  e.key === "ArrowUp" ||
-  e.keyCode === 38;
-const arrowDownKey = (e) =>
-  e.code === "ArrowDown" ||
-  e.key === "ArrowDown" ||
-  e.keyCode === 40;
-const jumpKey = (e) => arrowUpKey(e) || e.code === "Space" || e.key === " ";
-
-views.runner.querySelector(".runner-layout")?.addEventListener(
-  "pointerdown",
-  (e) => {
-    if (!views.runner.classList.contains("active")) return;
-    if (e.target.closest("button")) return;
-    views.runner.focus({ preventScroll: true });
-  },
-  true,
-);
-
-window.addEventListener(
-  "keydown",
-  (e) => {
-    if (!views.runner.classList.contains("active")) return;
-    if (!jumpKey(e) && !arrowDownKey(e)) return;
-    e.preventDefault();
-    if (!runnerApi.isRunning()) return;
-    if (jumpKey(e)) {
-      if (e.repeat) return;
-      runnerApi.tryJump();
-      return;
-    }
-    if (arrowDownKey(e)) runnerApi.setSlideKeyHeld(true);
-  },
-  true,
-);
-
-window.addEventListener(
-  "keyup",
-  (e) => {
-    if (!views.runner.classList.contains("active")) return;
-    if (!arrowDownKey(e)) return;
-    e.preventDefault();
-    runnerApi.setSlideKeyReleased();
-  },
-  true,
-);
-
-function runnerBeginPlay() {
-  hideOverlay();
-  hideRunnerLoseBar();
-  runnerApi.reset();
-  runnerApi.start();
-  views.runner.focus({ preventScroll: true });
-}
-
-document.getElementById("runner-restart").addEventListener("click", () => {
-  runnerBeginPlay();
-});
-
-document.getElementById("runner-lose-restart").addEventListener("click", () => {
-  runnerBeginPlay();
 });
 
 const breakoutScoreEl = document.getElementById("breakout-score");
@@ -442,12 +336,6 @@ document.querySelectorAll(".game-card").forEach((card) => {
       showView("snake");
       snakeApi.reset();
       snakeApi.start();
-    } else if (game === "runner") {
-      showView("runner");
-      hideRunnerLoseBar();
-      runnerApi.reset();
-      runnerApi.start();
-      views.runner.focus({ preventScroll: true });
     } else if (game === "minesweeper") {
       hideMsWinBar();
       hideMsLoseBar();
