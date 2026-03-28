@@ -15,6 +15,8 @@ export function createMinesweeper(rootEl, { onStatus, onWin, onLose }) {
   let firstClick = true;
   let gameOver = false;
   let won = false;
+  /** 踩中的雷格索引，用于爆炸动画 */
+  let detonatedIdx = -1;
 
   function idx(c, r) {
     return r * cols + c;
@@ -80,21 +82,25 @@ export function createMinesweeper(rootEl, { onStatus, onWin, onLose }) {
     }
     if (board[i] === -1) {
       gameOver = true;
+      detonatedIdx = i;
       for (let j = 0; j < board.length; j++) {
         if (board[j] === -1) revealed[j] = true;
       }
       onLose();
       return;
     }
-    const stack = [[c, r]];
-    while (stack.length) {
-      const [cc, cr] = stack.pop();
+    const queue = [[c, r]];
+    while (queue.length) {
+      const [cc, cr] = queue.shift();
       const ii = idx(cc, cr);
       if (flagged[ii] || revealed[ii]) continue;
       revealed[ii] = true;
       if (board[ii] === 0) {
         neighbors(cc, cr).forEach(([nc, nr]) => {
-          if (!revealed[idx(nc, nr)]) stack.push([nc, nr]);
+          const ni = idx(nc, nr);
+          if (!revealed[ni] && !flagged[ni] && board[ni] !== -1) {
+            queue.push([nc, nr]);
+          }
         });
       }
     }
@@ -111,6 +117,7 @@ export function createMinesweeper(rootEl, { onStatus, onWin, onLose }) {
       if (!revealed[ni] && !flagged[ni]) {
         if (board[ni] === -1) {
           gameOver = true;
+          detonatedIdx = ni;
           for (let j = 0; j < board.length; j++) {
             if (board[j] === -1) revealed[j] = true;
           }
@@ -120,6 +127,7 @@ export function createMinesweeper(rootEl, { onStatus, onWin, onLose }) {
         reveal(nc, nr);
       }
     }
+    checkWin();
   }
 
   function revealAllEndGame() {
@@ -188,6 +196,16 @@ export function createMinesweeper(rootEl, { onStatus, onWin, onLose }) {
             ic.className = "ms-mine-icon";
             ic.setAttribute("aria-hidden", "true");
             btn.append(ic);
+            if (gameOver && !won) {
+              if (i === detonatedIdx) {
+                btn.classList.add("mine-detonated");
+              } else if (detonatedIdx >= 0) {
+                btn.classList.add("mine-reveal-wave");
+                const dc = Math.abs(c - (detonatedIdx % cols));
+                const dr = Math.abs(r - Math.floor(detonatedIdx / cols));
+                btn.style.setProperty("--ms-wave-delay", `${Math.min(420, (dc + dr) * 38)}ms`);
+              }
+            }
           } else if (board[i] > 0) {
             btn.textContent = String(board[i]);
             btn.dataset.n = String(board[i]);
@@ -242,6 +260,7 @@ export function createMinesweeper(rootEl, { onStatus, onWin, onLose }) {
     firstClick = true;
     gameOver = false;
     won = false;
+    detonatedIdx = -1;
     render();
     updateStatus();
   }

@@ -58,7 +58,7 @@ document.querySelectorAll("[data-back]").forEach((btn) => {
     breakoutAdvanceAfterOverlay = false;
     hideOverlay();
     hideMsWinBar();
-    hideMsLoseModal();
+    hideMsLoseBar();
     const sm = document.getElementById("sol-score-modal");
     if (sm) {
       sm.classList.add("hidden");
@@ -205,7 +205,7 @@ const msRemaining = document.getElementById("ms-remaining");
 const msStatus = document.getElementById("ms-status");
 const msDifficulty = document.getElementById("ms-difficulty");
 const msWinBar = document.getElementById("ms-win-bar");
-const msLoseModal = document.getElementById("ms-lose-modal");
+const msLoseBar = document.getElementById("ms-lose-bar");
 
 function hideMsWinBar() {
   if (!msWinBar) return;
@@ -219,16 +219,16 @@ function showMsWinBar() {
   msWinBar.setAttribute("aria-hidden", "false");
 }
 
-function hideMsLoseModal() {
-  if (!msLoseModal) return;
-  msLoseModal.classList.add("hidden");
-  msLoseModal.setAttribute("aria-hidden", "true");
+function hideMsLoseBar() {
+  if (!msLoseBar) return;
+  msLoseBar.classList.add("hidden");
+  msLoseBar.setAttribute("aria-hidden", "true");
 }
 
-function showMsLoseModal() {
-  if (!msLoseModal) return;
-  msLoseModal.classList.remove("hidden");
-  msLoseModal.setAttribute("aria-hidden", "false");
+function showMsLoseBar() {
+  if (!msLoseBar) return;
+  msLoseBar.classList.remove("hidden");
+  msLoseBar.setAttribute("aria-hidden", "false");
 }
 
 const minesApi = createMinesweeper(document.getElementById("ms-root"), {
@@ -240,20 +240,20 @@ const minesApi = createMinesweeper(document.getElementById("ms-root"), {
   },
   onWin: () => {
     hideOverlay();
-    hideMsLoseModal();
+    hideMsLoseBar();
     showMsWinBar();
   },
   onLose: () => {
     hideOverlay();
     hideMsWinBar();
-    showMsLoseModal();
+    showMsLoseBar();
   },
 });
 
 document.getElementById("ms-restart").addEventListener("click", () => {
   hideOverlay();
   hideMsWinBar();
-  hideMsLoseModal();
+  hideMsLoseBar();
   minesApi.reset();
 });
 
@@ -263,14 +263,14 @@ document.getElementById("ms-win-continue").addEventListener("click", () => {
 });
 
 document.getElementById("ms-lose-restart").addEventListener("click", () => {
-  hideMsLoseModal();
+  hideMsLoseBar();
   minesApi.reset();
 });
 
 msDifficulty.addEventListener("change", () => {
   hideOverlay();
   hideMsWinBar();
-  hideMsLoseModal();
+  hideMsLoseBar();
   minesApi.setDifficulty(msDifficulty.value);
 });
 
@@ -338,7 +338,7 @@ document.querySelectorAll(".game-card").forEach((card) => {
       snakeApi.start();
     } else if (game === "minesweeper") {
       hideMsWinBar();
-      hideMsLoseModal();
+      hideMsLoseBar();
       showView("minesweeper");
       minesApi.setDifficulty(msDifficulty.value);
     } else if (game === "solitaire") {
