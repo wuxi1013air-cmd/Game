@@ -37,6 +37,11 @@ overlay.addEventListener("click", (e) => {
 document.querySelectorAll("[data-back]").forEach((btn) => {
   btn.addEventListener("click", () => {
     hideOverlay();
+    const sm = document.getElementById("sol-score-modal");
+    if (sm) {
+      sm.classList.add("hidden");
+      sm.setAttribute("aria-hidden", "true");
+    }
     snakeApi.stop();
     showView("home");
   });
@@ -109,12 +114,45 @@ msDifficulty.addEventListener("change", () => {
   minesApi.setDifficulty(msDifficulty.value);
 });
 
+const SOL_SCORING_KEY = "mini-arcade-sol-scoring-on";
 const solScoreEl = document.getElementById("sol-score");
 const solMovesEl = document.getElementById("sol-moves");
 const solBestEl = document.getElementById("sol-best");
+const solScoringEnabled = document.getElementById("sol-scoring-enabled");
+const solScoreModal = document.getElementById("sol-score-modal");
+
+solScoringEnabled.checked = localStorage.getItem(SOL_SCORING_KEY) === "1";
+solScoringEnabled.addEventListener("change", () => {
+  localStorage.setItem(SOL_SCORING_KEY, solScoringEnabled.checked ? "1" : "0");
+});
+
+function openSolScoreModal() {
+  solScoreModal.classList.remove("hidden");
+  solScoreModal.setAttribute("aria-hidden", "false");
+}
+
+function closeSolScoreModal() {
+  solScoreModal.classList.add("hidden");
+  solScoreModal.setAttribute("aria-hidden", "true");
+}
+
+document.getElementById("sol-score-btn").addEventListener("click", openSolScoreModal);
+document.getElementById("sol-modal-close").addEventListener("click", closeSolScoreModal);
+document.getElementById("sol-score-modal-backdrop").addEventListener("click", closeSolScoreModal);
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !solScoreModal.classList.contains("hidden")) {
+    closeSolScoreModal();
+  }
+});
 
 const solitaireApi = createSolitaire(document.getElementById("sol-root"), {
+  isScoringMode: () => solScoringEnabled.checked,
   onWin: (finalScore) => {
+    if (finalScore == null) {
+      showOverlay("胜利", "已完成整副牌。当前为练习模式，未计分、不更新最佳纪录。");
+      return;
+    }
     const best = Number(localStorage.getItem("mini-arcade-solitaire-best")) || 0;
     showOverlay("胜利", `本局得分 ${finalScore} 分。历史最佳 ${best} 分（已写入本机）。`);
   },

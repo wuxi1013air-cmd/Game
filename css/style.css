@@ -388,9 +388,127 @@ main {
   color: #1f0000;
 }
 
-.sol-stats {
+.sol-toolbar-actions {
+  margin-left: auto;
+  display: flex;
   flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.sol-drop-bad {
+  box-shadow:
+    0 0 0 3px #ef4444,
+    0 0 22px rgba(239, 68, 68, 0.65) !important;
+  border-color: #f87171 !important;
+  animation: sol-drop-bad-pulse 0.42s ease;
+}
+
+@keyframes sol-drop-bad-pulse {
+  0%,
+  100% {
+    filter: none;
+  }
+  40% {
+    filter: brightness(1.15);
+  }
+}
+
+.sol-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  padding: 1rem;
+}
+
+.sol-modal.hidden {
+  display: none;
+}
+
+.sol-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 10, 14, 0.75);
+  backdrop-filter: blur(5px);
+}
+
+.sol-modal__panel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 380px;
+  padding: 1.5rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow);
+}
+
+.sol-modal__title {
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.sol-modal__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  margin-bottom: 0.65rem;
+}
+
+.sol-modal__toggle input {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--accent-dim);
+}
+
+.sol-modal__note {
+  margin: 0 0 1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.sol-modal__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+}
+
+.sol-modal__stat {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.sol-modal__stat strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+.sol-modal__rules {
+  margin: 0 0 1.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.sol-modal__close {
+  width: 100%;
 }
 
 .solitaire {

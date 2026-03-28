@@ -69,15 +69,13 @@
     <section id="view-solitaire" class="view view-wide">
       <div class="game-toolbar">
         <button type="button" class="btn ghost" data-back>← 返回</button>
-        <div class="stats sol-stats">
-          <span>得分 <strong id="sol-score">0</strong></span>
-          <span>步数 <strong id="sol-moves">0</strong></span>
-          <span>最佳 <strong id="sol-best">0</strong></span>
+        <div class="toolbar-actions sol-toolbar-actions">
+          <button type="button" class="btn ghost" id="sol-score-btn">计分</button>
+          <button type="button" class="btn" id="sol-restart">洗牌重开</button>
         </div>
-        <button type="button" class="btn" id="sol-restart">洗牌重开</button>
       </div>
       <div id="sol-root"></div>
-      <p class="hint">计分：收到右上角 +10；翻开压牌 +5；废牌移到列 +5；列间移整叠 +3；废牌收库一圈 −20。双击单张可尝试收到对应花色堆。</p>
+      <p class="hint">拖拽叠牌；双击单张可尝试收到对应花色堆。得分规则在「计分」里查看。</p>
     </section>
 
     <section id="view-snake" class="view">
@@ -99,6 +97,25 @@
   <footer class="site-footer">
     <span>本地即玩 · 无后端</span>
   </footer>
+
+  <div id="sol-score-modal" class="sol-modal hidden" aria-hidden="true">
+    <div class="sol-modal__backdrop" id="sol-score-modal-backdrop"></div>
+    <div class="sol-modal__panel" role="dialog" aria-modal="true" aria-labelledby="sol-modal-title">
+      <h2 id="sol-modal-title" class="sol-modal__title">纸牌计分</h2>
+      <label class="sol-modal__toggle">
+        <input type="checkbox" id="sol-scoring-enabled" />
+        <span>开启计分模式</span>
+      </label>
+      <p class="sol-modal__note">关闭时：不累计得分、通关不写入最佳纪录；步数仍会统计。</p>
+      <div id="sol-modal-stats" class="sol-modal__stats">
+        <div class="sol-modal__stat"><span>得分</span> <strong id="sol-score">0</strong></div>
+        <div class="sol-modal__stat"><span>步数</span> <strong id="sol-moves">0</strong></div>
+        <div class="sol-modal__stat"><span>最佳</span> <strong id="sol-best">0</strong></div>
+      </div>
+      <p class="sol-modal__rules">规则：收到右上角 +10；翻开压牌 +5；废牌移到列 +5；列间移整叠 +3；废牌收库一圈 −20。</p>
+      <button type="button" class="btn sol-modal__close" id="sol-modal-close">关闭</button>
+    </div>
+  </div>
 
   <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
     <div class="overlay-card">

@@ -50,7 +50,7 @@ function saveBest(n) {
   localStorage.setItem(BEST_KEY, String(n));
 }
 
-export function createSolitaire(rootEl, { onWin, onScore }) {
+export function createSolitaire(rootEl, { onWin, onScore, isScoringMode = () => false }) {
   let stock = [];
   let waste = [];
   let foundations = [[], [], [], []];
@@ -60,11 +60,16 @@ export function createSolitaire(rootEl, { onWin, onScore }) {
 
   let drag = null;
 
+  function scoringOn() {
+    return Boolean(isScoringMode?.());
+  }
+
   function emit() {
     onScore?.({ score, moves, best: bestEver() });
   }
 
   function addPoints(delta) {
+    if (!scoringOn()) return;
     score += delta;
     emit();
   }
@@ -143,10 +148,12 @@ export function createSolitaire(rootEl, { onWin, onScore }) {
     });
     if (n === 52) {
       gameWon = true;
-      const b = bestEver();
-      if (score > b) saveBest(score);
+      if (scoringOn()) {
+        const b = bestEver();
+        if (score > b) saveBest(score);
+      }
       emit();
-      onWin?.(score);
+      onWin?.(scoringOn() ? score : null);
     }
   }
 
@@ -197,7 +204,7 @@ export function createSolitaire(rootEl, { onWin, onScore }) {
     const src = fromWaste
       ? { from: "waste", cards: [card] }
       : { from: "tableau", col, start: idx, cards: [card] };
-    if (!applyToFoundation(fi, src)) render();
+    applyToFoundation(fi, src);
   }
 
   function buildCardFaceHTML(c) {
@@ -242,11 +249,14 @@ export function createSolitaire(rootEl, { onWin, onScore }) {
     return { el: g, move };
   }
 
-  function findDropTarget(x, y) {
+  function findDropTargetEl(x, y) {
     const stack = document.elementsFromPoint(x, y);
     for (const el of stack) {
       const t = el.closest?.("[data-sol-drop]");
-      if (t) return t.getAttribute("data-sol-drop");
+      if (t) {
+        const code = t.getAttribute("data-sol-drop");
+        if (code) return { code, el: t };
+      }
     }
     return null;
   }
@@ -294,26 +304,28 @@ export function createSolitaire(rootEl, { onWin, onScore }) {
       endDrag();
       return;
     }
-    const drop = findDropTarget(e.clientX, e.clientY);
+    const hit = findDropTargetEl(e.clientX, e.clientY);
     const src = drag.src;
     endDrag();
-    if (!drop) {
-      render();
-      return;
-    }
+
+    if (!hit) return;
+
+    const drop = hit.code;
+    let success = false;
     if (drop.startsWith("F")) {
       const fi = Number(drop.slice(1));
-      if (!Number.isNaN(fi) && applyToFoundation(fi, src)) return;
-      render();
-      return;
-    }
-    if (drop.startsWith("T")) {
+      if (!Number.isNaN(fi)) success = applyToFoundation(fi, src);
+    } else if (drop.startsWith("T")) {
       const col = Number(drop.slice(1));
-      if (!Number.isNaN(col) && applyToTableau(col, src)) return;
-      render();
-      return;
+      if (!Number.isNaN(col)) success = applyToTableau(col, src);
     }
-    render();
+
+    if (success) return;
+
+    hit.el.classList.add("sol-drop-bad");
+    window.setTimeout(() => {
+      hit.el.classList.remove("sol-drop-bad");
+    }, 420);
   }
 
   function bindDrag(cardWrap, src, sourceElsGetter) {
