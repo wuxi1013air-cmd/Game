@@ -421,40 +421,67 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
       const scaleX = canvas.width / r.width;
       const cx = (e.clientX - r.left) * scaleX;
 
-      if (e.pointerType === "mouse") {
-        if (e.button === 0) {
-          e.preventDefault();
-          jump();
-        } else if (e.button === 2) {
-          e.preventDefault();
+      // 仅把真正的触摸当成「半屏」；其余（mouse / pen / 空字符串等）一律按鼠标键处理，
+      // 避免 Safari 等环境下 pointerType 不是 "mouse" 导致左右键全无响应。
+      if (e.pointerType === "touch") {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        try {
+          canvas.setPointerCapture(e.pointerId);
+        } catch (_) {
+          /* ignore */
+        }
+        if (cx < canvas.width * 0.5) jump();
+        else {
           slidePointerHeld = true;
           slideStart();
         }
         return;
       }
 
-      if (e.pointerType === "touch" && e.button === 0) {
+      if (e.button === 0) {
         e.preventDefault();
-        if (cx < canvas.width * 0.5) jump();
-        else {
-          slidePointerHeld = true;
-          slideStart();
+        try {
+          canvas.setPointerCapture(e.pointerId);
+        } catch (_) {
+          /* ignore */
         }
+        jump();
+      } else if (e.button === 2) {
+        e.preventDefault();
+        try {
+          canvas.setPointerCapture(e.pointerId);
+        } catch (_) {
+          /* ignore */
+        }
+        slidePointerHeld = true;
+        slideStart();
       }
     };
 
     const onPointerUp = (e) => {
       if (!active()) return;
-      if (e.pointerType === "mouse" && e.button === 2) {
-        slidePointerHeld = false;
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch (_) {
+        /* ignore */
       }
       if (e.pointerType === "touch") {
         slidePointerHeld = false;
+        return;
       }
+      if (e.button === 2) slidePointerHeld = false;
+    };
+
+    /** 在画布外松开右键时，pointerup 不一定落在 canvas 上 */
+    const onWindowMouseUp = (e) => {
+      if (!active()) return;
+      if (e.button === 2) slidePointerHeld = false;
     };
 
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("keyup", onKeyUp, true);
+    window.addEventListener("mouseup", onWindowMouseUp, true);
     canvas.addEventListener("contextmenu", onContextMenu);
     canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
     canvas.addEventListener("pointerup", onPointerUp, { passive: true });
@@ -463,6 +490,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
+      window.removeEventListener("mouseup", onWindowMouseUp, true);
       canvas.removeEventListener("contextmenu", onContextMenu);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointerup", onPointerUp);
