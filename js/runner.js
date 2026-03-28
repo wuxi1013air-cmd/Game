@@ -1,5 +1,5 @@
 /**
- * 横版跑酷：小键盘 8 跳、2 滑铲；趴下/起身速度由 SLIDE_ANIM_SPEED 控制。
+ * 横版跑酷：↑ 跳、↓ 滑铲；趴下/起身速度由 SLIDE_ANIM_SPEED 控制。
  * 地刺 / 仙人掌：碰到即死。高墙仅上部实体；正面顶墙左推；洞下松铲起身判输。
  */
 
@@ -416,14 +416,14 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
 
     const onKeyDown = (e) => {
       if (!active() || !running) return;
-      if (e.code === "Numpad8") {
+      if (e.code === "ArrowUp") {
         if (e.repeat) return;
         e.preventDefault();
         e.stopPropagation();
         jump();
         return;
       }
-      if (e.code === "Numpad2") {
+      if (e.code === "ArrowDown") {
         e.preventDefault();
         e.stopPropagation();
         slideKeyHeld = true;
@@ -432,7 +432,7 @@ export function createRunner(canvas, { onScore, onGameOver, getBestEl, isActive 
     };
     const onKeyUp = (e) => {
       if (!active()) return;
-      if (e.code === "Numpad2") {
+      if (e.code === "ArrowDown") {
         e.preventDefault();
         slideKeyHeld = false;
       }
