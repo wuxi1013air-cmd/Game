@@ -147,7 +147,6 @@ window.addEventListener("keydown", (e) => {
 });
 
 const solitaireApi = createSolitaire(document.getElementById("sol-root"), {
-  dragHudEl: document.getElementById("sol-drag-hud"),
   isScoringMode: () => solScoringEnabled.checked,
   onWin: (finalScore) => {
     if (finalScore == null) {
