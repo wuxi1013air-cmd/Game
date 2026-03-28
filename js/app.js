@@ -123,7 +123,7 @@ const breakoutApi = createBreakout(breakoutCanvas, {
   },
   onWin: (final) => {
     breakoutAdvanceAfterOverlay = true;
-    showOverlay("过关", `清完砖块！本关得分累计 ${final}。点「知道了」进入下一关。`);
+    showOverlay("恭喜通关", `清完砖块！本关得分累计 ${final}。`);
   },
   onLose: (final) => {
     showOverlay("游戏结束", `生命用尽。得分 ${final}。`);

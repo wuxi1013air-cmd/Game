@@ -18,6 +18,9 @@ const POWERUP_FALL_VY = 2.8;
 const POWERUP_R = 11;
 /** 场上小球数量上限 */
 const MAX_BALLS = 20;
+/** 仅左右墙交替反弹满 4 次（两来回）后，给速度加上偏上 30° */
+const SIDE_WALL_ALT_FOR_BIAS = 4;
+const UPWARD_BIAS_DEG = (30 * Math.PI) / 180;
 
 export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
   const ctx = canvas.getContext("2d");
@@ -378,21 +381,59 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
     }
   }
 
+  function resetSideWallTracking(ball) {
+    ball.sideAltCount = 0;
+    ball.lastSide = null;
+  }
+
+  /** 相对水平向上偏 30°，保持速率；vx≥0 右上，vx<0 左上 */
+  function applyUpward30Bias(ball) {
+    const sp = Math.hypot(ball.vx, ball.vy);
+    if (sp < 1e-6) return;
+    const c = Math.cos(UPWARD_BIAS_DEG);
+    const s = Math.sin(UPWARD_BIAS_DEG);
+    if (ball.vx >= 0) {
+      ball.vx = c * sp;
+      ball.vy = -s * sp;
+    } else {
+      ball.vx = -c * sp;
+      ball.vy = -s * sp;
+    }
+    capBallSpeed(ball);
+  }
+
+  function onSideWallHit(ball, side) {
+    const opp = side === "l" ? "r" : "l";
+    if (ball.lastSide === opp) {
+      ball.sideAltCount = (ball.sideAltCount || 0) + 1;
+    } else {
+      ball.sideAltCount = 1;
+    }
+    ball.lastSide = side;
+    if (ball.sideAltCount >= SIDE_WALL_ALT_FOR_BIAS) {
+      applyUpward30Bias(ball);
+      resetSideWallTracking(ball);
+    }
+  }
+
   function stepBall(ball) {
     ball.x += ball.vx;
     ball.y += ball.vy;
 
-    if (ball.x < BALL_R) {
-      ball.x = BALL_R;
-      ball.vx *= -1;
-    }
-    if (ball.x > W - BALL_R) {
-      ball.x = W - BALL_R;
-      ball.vx *= -1;
-    }
     if (ball.y < BALL_R) {
       ball.y = BALL_R;
       ball.vy *= -1;
+      resetSideWallTracking(ball);
+    }
+
+    if (ball.x < BALL_R) {
+      ball.x = BALL_R;
+      ball.vx *= -1;
+      onSideWallHit(ball, "l");
+    } else if (ball.x > W - BALL_R) {
+      ball.x = W - BALL_R;
+      ball.vx *= -1;
+      onSideWallHit(ball, "r");
     }
 
     const py = H - PADDLE_Y_OFF;
@@ -407,12 +448,14 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
       ball.vx += hit * 2.4;
       ball.vy = -Math.abs(ball.vy) - 0.08;
       capBallSpeed(ball);
+      resetSideWallTracking(ball);
     }
 
     for (const b of bricks) {
       if (!b.alive) continue;
       if (!circleOverlapsBrick(b, ball)) continue;
       if (!resolveBrickCollision(b, ball)) continue;
+      resetSideWallTracking(ball);
       if (!b.indestructible) {
         b.alive = false;
         score += 10;
