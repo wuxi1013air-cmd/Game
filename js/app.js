@@ -1,12 +1,16 @@
 import { createSnakeGame } from "./snake.js";
 import { createMinesweeper } from "./minesweeper.js";
 import { createSolitaire } from "./solitaire.js";
+import { createBreakout } from "./breakout.js";
+import { createGame2048 } from "./game2048.js";
 
 const views = {
   home: document.getElementById("view-home"),
   snake: document.getElementById("view-snake"),
   minesweeper: document.getElementById("view-minesweeper"),
   solitaire: document.getElementById("view-solitaire"),
+  breakout: document.getElementById("view-breakout"),
+  game2048: document.getElementById("view-2048"),
 };
 
 const overlay = document.getElementById("overlay");
@@ -43,6 +47,7 @@ document.querySelectorAll("[data-back]").forEach((btn) => {
       sm.setAttribute("aria-hidden", "true");
     }
     snakeApi.stop();
+    breakoutApi.stop();
     showView("home");
   });
 });
@@ -87,6 +92,85 @@ window.addEventListener("keydown", (e) => {
   if (!m) return;
   e.preventDefault();
   snakeApi.setDirection(m[0], m[1]);
+});
+
+const breakoutScoreEl = document.getElementById("breakout-score");
+const breakoutLivesEl = document.getElementById("breakout-lives");
+const breakoutCanvas = document.getElementById("breakout-canvas");
+
+const breakoutApi = createBreakout(breakoutCanvas, {
+  onScore: (n) => {
+    breakoutScoreEl.textContent = String(n);
+  },
+  onLives: (n) => {
+    breakoutLivesEl.textContent = String(n);
+  },
+  onWin: (final) => {
+    showOverlay("过关", `清完砖块！得分 ${final}。`);
+  },
+  onLose: (final) => {
+    showOverlay("游戏结束", `生命用尽。得分 ${final}。`);
+  },
+});
+
+document.getElementById("breakout-restart").addEventListener("click", () => {
+  hideOverlay();
+  breakoutApi.reset();
+  breakoutApi.start();
+});
+
+function breakoutPointerMove(e) {
+  if (!views.breakout.classList.contains("active")) return;
+  breakoutApi.setPaddleFromClientX(e.clientX);
+}
+
+breakoutCanvas.addEventListener("pointermove", breakoutPointerMove);
+breakoutCanvas.addEventListener("mousemove", breakoutPointerMove);
+
+const g2048ScoreEl = document.getElementById("g2048-score");
+const g2048BestEl = document.getElementById("g2048-best");
+
+const game2048Api = createGame2048(document.getElementById("game2048-root"), {
+  onScore: (n) => {
+    g2048ScoreEl.textContent = String(n);
+  },
+  onBest: (n) => {
+    g2048BestEl.textContent = String(n);
+  },
+  onWin: (n) => {
+    showOverlay("达成 2048", `当前分数 ${n}。可继续挑战更高数字。`);
+  },
+  onLose: (n) => {
+    showOverlay("无路可走", `本局结束，得分 ${n}。点击「新局」再试。`);
+  },
+});
+
+document.getElementById("g2048-restart").addEventListener("click", () => {
+  hideOverlay();
+  game2048Api.reset();
+});
+
+const dir2048Map = {
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  ArrowUp: "up",
+  ArrowDown: "down",
+  a: "left",
+  A: "left",
+  d: "right",
+  D: "right",
+  w: "up",
+  W: "up",
+  s: "down",
+  S: "down",
+};
+
+window.addEventListener("keydown", (e) => {
+  if (!views.game2048.classList.contains("active")) return;
+  const dir = dir2048Map[e.key];
+  if (!dir) return;
+  e.preventDefault();
+  game2048Api.input(dir);
 });
 
 const msRemaining = document.getElementById("ms-remaining");
@@ -182,6 +266,13 @@ document.querySelectorAll(".game-card").forEach((card) => {
     } else if (game === "solitaire") {
       showView("solitaire");
       solitaireApi.reset();
+    } else if (game === "breakout") {
+      showView("breakout");
+      breakoutApi.reset();
+      breakoutApi.start();
+    } else if (game === "game2048") {
+      showView("game2048");
+      game2048Api.reset();
     }
   });
 });

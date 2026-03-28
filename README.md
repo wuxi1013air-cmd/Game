@@ -1,6 +1,6 @@
 # Mini Arcade · 迷你游戏站
 
-纯静态页面：扫雷、纸牌（克朗代克，拖拽 + 计分）、贪吃蛇。可直接托管在 **GitHub Pages**，无需构建。
+纯静态页面：扫雷、纸牌（克朗代克，拖拽 + 计分）、贪吃蛇、打砖块、2048。可直接托管在 **GitHub Pages**，无需构建。
 
 ## 本地预览
 
@@ -60,7 +60,9 @@ mini-games-site/
 ├── js/app.js
 ├── js/snake.js
 ├── js/minesweeper.js
-└── js/solitaire.js
+├── js/solitaire.js
+├── js/breakout.js
+└── js/game2048.js
 ```
 
 ## 许可

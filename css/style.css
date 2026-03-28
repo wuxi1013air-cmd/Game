@@ -264,6 +264,142 @@ main {
   box-shadow: var(--shadow);
 }
 
+.breakout-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+#breakout-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: #0a0c12;
+  box-shadow: var(--shadow);
+  touch-action: none;
+  cursor: ew-resize;
+}
+
+.g2048-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.g2048-board {
+  width: min(100%, 380px);
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow);
+}
+
+.g2048-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.g2048-cell {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: rgba(30, 36, 54, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.g2048-tile {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(0.95rem, 5.5vw, 1.65rem);
+  transition: background 0.12s, color 0.12s;
+}
+
+.g2048-tile--empty {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.g2048-tile--n2 {
+  background: #3d3a52;
+  color: #e8ecf4;
+}
+
+.g2048-tile--n4 {
+  background: #4a3d6b;
+  color: #e8ecf4;
+}
+
+.g2048-tile--n8 {
+  background: #5b3d7a;
+  color: #fdf4ff;
+}
+
+.g2048-tile--n16 {
+  background: #6b3d6e;
+  color: #fff;
+}
+
+.g2048-tile--n32 {
+  background: #7a3d5c;
+  color: #fff;
+}
+
+.g2048-tile--n64 {
+  background: #8a3d4a;
+  color: #fff;
+}
+
+.g2048-tile--n128 {
+  background: #9a4d3a;
+  color: #fff;
+  font-size: clamp(0.85rem, 5vw, 1.45rem);
+}
+
+.g2048-tile--n256 {
+  background: #a85c2e;
+  color: #fff;
+  font-size: clamp(0.85rem, 5vw, 1.45rem);
+}
+
+.g2048-tile--n512 {
+  background: #b86a22;
+  color: #fff;
+  font-size: clamp(0.8rem, 4.8vw, 1.35rem);
+}
+
+.g2048-tile--n1024 {
+  background: #c87818;
+  color: #fff;
+  font-size: clamp(0.72rem, 4.2vw, 1.2rem);
+}
+
+.g2048-tile--n2048 {
+  background: #d4a017;
+  color: #1a1204;
+  font-size: clamp(0.65rem, 3.8vw, 1.1rem);
+  box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.45);
+}
+
+.g2048-tile--nbig {
+  background: #6ee7b7;
+  color: #0c0e14;
+  font-size: clamp(0.6rem, 3.5vw, 1rem);
+}
+
 .hint {
   margin: 0;
   font-size: 0.8rem;

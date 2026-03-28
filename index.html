@@ -19,7 +19,7 @@
       <span class="logo-icon">◆</span>
       <span>Mini Arcade</span>
     </div>
-    <p class="tagline">扫雷 · 纸牌 · 贪吃蛇 · 纯前端 GitHub Pages</p>
+    <p class="tagline">扫雷 · 纸牌 · 贪吃蛇 · 打砖块 · 2048 · 纯前端 GitHub Pages</p>
   </header>
 
   <main>
@@ -40,6 +40,16 @@
           <span class="card-emoji">🐍</span>
           <span class="card-name">贪吃蛇</span>
           <span class="card-desc">方向键或 WASD</span>
+        </button>
+        <button type="button" class="game-card" data-game="breakout">
+          <span class="card-emoji">🧱</span>
+          <span class="card-name">打砖块</span>
+          <span class="card-desc">移动鼠标或手指控制挡板</span>
+        </button>
+        <button type="button" class="game-card" data-game="game2048">
+          <span class="card-emoji">🔢</span>
+          <span class="card-name">2048</span>
+          <span class="card-desc">合并数字，凑出 2048</span>
         </button>
       </div>
     </section>
@@ -90,6 +100,36 @@
       <div class="snake-wrap">
         <canvas id="snake-canvas" width="400" height="400" aria-label="贪吃蛇游戏区域"></canvas>
         <p class="hint">使用 ↑ ↓ ← → 或 WASD 控制</p>
+      </div>
+    </section>
+
+    <section id="view-breakout" class="view">
+      <div class="game-toolbar">
+        <button type="button" class="btn ghost" data-back>← 返回</button>
+        <div class="stats">
+          <span>得分 <strong id="breakout-score">0</strong></span>
+          <span>生命 <strong id="breakout-lives">3</strong></span>
+        </div>
+        <button type="button" class="btn" id="breakout-restart">重新开始</button>
+      </div>
+      <div class="breakout-wrap">
+        <canvas id="breakout-canvas" width="480" height="520" aria-label="打砖块游戏区域" tabindex="0"></canvas>
+        <p class="hint">移动指针控制挡板；清完砖块即过关</p>
+      </div>
+    </section>
+
+    <section id="view-2048" class="view">
+      <div class="game-toolbar">
+        <button type="button" class="btn ghost" data-back>← 返回</button>
+        <div class="stats">
+          <span>分数 <strong id="g2048-score">0</strong></span>
+          <span>最高 <strong id="g2048-best">0</strong></span>
+        </div>
+        <button type="button" class="btn" id="g2048-restart">新局</button>
+      </div>
+      <div class="g2048-wrap">
+        <div id="game2048-root"></div>
+        <p class="hint">↑ ↓ ← → 或 WASD 滑动方块</p>
       </div>
     </section>
   </main>
