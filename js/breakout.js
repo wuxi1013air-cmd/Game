@@ -12,6 +12,8 @@ const BALL_SPEED_CAP = 10.5;
 /** 分裂出的两球速率（与竖直成 45° 向左右上） */
 const SPLIT_SPEED = 5.4;
 const POWERUP_SPAWN_CHANCE = 0.1;
+/** 每打碎一块砖未掉落技能时 +1%，掉落分裂球后清零 */
+const POWERUP_PITY_STEP = 0.01;
 const POWERUP_FALL_VY = 2.8;
 const POWERUP_R = 11;
 /** 场上小球数量上限 */
@@ -32,6 +34,8 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
   let launched = false;
   /** @type {{ x: number; y: number; vy: number; r: number }[]} */
   let powerUps = [];
+  /** 分裂道具概率保底加成（不含基础 10%） */
+  let powerUpPity = 0;
   let bricks = [];
   let score = 0;
   let lives = 3;
@@ -214,13 +218,18 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
   }
 
   function maybeSpawnPowerUp(brick) {
-    if (Math.random() >= POWERUP_SPAWN_CHANCE) return;
-    powerUps.push({
-      x: brick.x + brick.w / 2,
-      y: brick.y + brick.h / 2,
-      vy: POWERUP_FALL_VY,
-      r: POWERUP_R,
-    });
+    const p = Math.min(1, POWERUP_SPAWN_CHANCE + powerUpPity);
+    if (Math.random() < p) {
+      powerUpPity = 0;
+      powerUps.push({
+        x: brick.x + brick.w / 2,
+        y: brick.y + brick.h / 2,
+        vy: POWERUP_FALL_VY,
+        r: POWERUP_R,
+      });
+    } else {
+      powerUpPity += POWERUP_PITY_STEP;
+    }
   }
 
   /**
@@ -561,6 +570,7 @@ export function createBreakout(canvas, { onScore, onLives, onWin, onLose }) {
     balls = [];
     launched = false;
     powerUps = [];
+    powerUpPity = 0;
     score = 0;
     lives = 3;
     buildBricks();
