@@ -23,10 +23,11 @@ const PICKUP_RADIUS = 35;
 const ORB_FLY_SPEED = 14;
 const ORB_VISUAL_R = 3.5;
 const BULLET_STAGGER_MS = 32;
+const ENEMY_HIT_FLASH_MS = 140;
 
 function xpToNext(level) {
   if (level >= LEVEL_MAX) return 1;
-  return Math.round(34 * Math.pow(1.24, level));
+  return Math.round(34 * Math.pow(1.24, level)) * 2;
 }
 
 /** 普通怪碰撞半径（方形视觉略大于 r） */
@@ -43,6 +44,17 @@ function spawnIntervalForWave(w) {
   return Math.max(265, 740 - w * 42);
 }
 
+/**
+ * 升级卡牌（展示用 CARD_DEFS）与数值（见下方 applyCard / 全局常量）对照：
+ * | id          | 变量           | 每次选择效果              |
+ * |-------------|----------------|---------------------------|
+ * | multishot   | shotsPerVolley | +1 条弹道（扇面方向数）   |
+ * | bulletcount | bulletCount    | +1 每条弹道的子弹发数     |
+ * | damage      | damageMult     | ×1.3 子弹伤害倍率         |
+ * | pierce      | pierceExtra    | +1 穿透（第 n+1 敌阻挡）  |
+ * | atkspd      | atkSpdMult     | ×1.5 攻速（缩短开火间隔） |
+ * 基础子弹伤害 BASE_BULLET_DMG、开火间隔 BASE_FIRE_MS、子弹速度 BULLET_SPEED 见文件顶部。
+ */
 const CARD_DEFS = {
   multishot: { title: "弹道", desc: "弹道 +1" },
   bulletcount: { title: "子弹", desc: "子弹 +1" },
@@ -148,7 +160,7 @@ export function createSurvivor(canvas, hooks) {
 
   /** @type {{ x: number; y: number; vx: number; vy: number; dmg: number; pierceLeft: number }[]} */
   let bullets = [];
-  /** @type {{ x: number; y: number; kind: 'square' | 'boss'; hp: number; maxHp: number; r: number; speed: number; contactDmg: number; rot: number }[]} */
+  /** @type {{ x: number; y: number; kind: 'square' | 'boss'; hp: number; maxHp: number; r: number; speed: number; contactDmg: number; rot: number; hitFlashMs: number }[]} */
   let enemies = [];
   let xpOrbs = [];
   let xp = 0;
@@ -249,6 +261,7 @@ export function createSurvivor(canvas, hooks) {
       speed: spd,
       contactDmg: dmg,
       rot: Math.random() * Math.PI,
+      hitFlashMs: 0,
     });
   }
 
@@ -264,6 +277,7 @@ export function createSurvivor(canvas, hooks) {
       speed: 1.5,
       contactDmg: 50,
       rot: 0,
+      hitFlashMs: 0,
     });
   }
 
@@ -501,6 +515,7 @@ export function createSurvivor(canvas, hooks) {
       e.x += (dx / d) * e.speed * step;
       e.y += (dy / d) * e.speed * step;
       e.rot += (dt / 400) * (e.kind === "boss" ? 0.35 : 1.1);
+      e.hitFlashMs = Math.max(0, e.hitFlashMs - dt);
     }
 
     for (let bi = bullets.length - 1; bi >= 0; bi--) {
@@ -512,6 +527,7 @@ export function createSurvivor(canvas, hooks) {
         if (hi === -1) break;
         const e = enemies[hi];
         e.hp -= b.dmg;
+        e.hitFlashMs = ENEMY_HIT_FLASH_MS;
         b.pierceLeft -= 1;
         if (e.hp <= 0) {
           if (e.kind !== "boss" && level < LEVEL_MAX && Math.random() < XP_DROP_CHANCE) {
@@ -609,6 +625,7 @@ export function createSurvivor(canvas, hooks) {
 
     for (const e of enemies) {
       if (e.kind === "boss") {
+        const hit = e.hitFlashMs > 0;
         drawPolygon(
           ctx,
           e.x,
@@ -616,8 +633,8 @@ export function createSurvivor(canvas, hooks) {
           BOSS_VISUAL_R,
           5,
           e.rot,
-          "rgba(244, 114, 182, 0.35)",
-          "#f472b6",
+          hit ? "rgba(252, 165, 165, 0.5)" : "rgba(244, 114, 182, 0.35)",
+          hit ? "#fca5a5" : "#f472b6",
         );
         const barW = BOSS_VISUAL_R * 2;
         const barH = 4;
@@ -635,8 +652,9 @@ export function createSurvivor(canvas, hooks) {
         ctx.save();
         ctx.translate(e.x, e.y);
         ctx.rotate(e.rot);
-        ctx.fillStyle = "rgba(167, 139, 250, 0.45)";
-        ctx.strokeStyle = "#a78bfa";
+        const hit = e.hitFlashMs > 0;
+        ctx.fillStyle = hit ? "rgba(252, 165, 165, 0.55)" : "rgba(167, 139, 250, 0.45)";
+        ctx.strokeStyle = hit ? "#f87171" : "#a78bfa";
         ctx.lineWidth = 1.5;
         const s = e.r * 1.45;
         ctx.fillRect(-s / 2, -s / 2, s, s);
@@ -713,14 +731,15 @@ export function createSurvivor(canvas, hooks) {
 
     if (waveClear && waveCountdown > 0) {
       const sec = Math.max(1, Math.ceil(waveCountdown / 1000));
-      ctx.font = "bold 18px 'JetBrains Mono', ui-monospace, monospace";
+      const msg = `距离下一波还有：${sec}S`;
+      ctx.font = "bold 28px 'JetBrains Mono', ui-monospace, monospace";
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
-      ctx.strokeStyle = "rgba(0,0,0,0.5)";
-      ctx.lineWidth = 3;
-      ctx.strokeText(`距离下一波还有：${sec}S`, 14, 14);
-      ctx.fillStyle = "rgba(232, 236, 244, 0.9)";
-      ctx.fillText(`距离下一波还有：${sec}S`, 14, 14);
+      ctx.strokeStyle = "rgba(0,0,0,0.55)";
+      ctx.lineWidth = 5;
+      ctx.strokeText(msg, 14, 14);
+      ctx.fillStyle = "rgba(232, 236, 244, 0.95)";
+      ctx.fillText(msg, 14, 14);
     }
   }
 

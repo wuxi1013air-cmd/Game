@@ -912,6 +912,10 @@ main {
   z-index: 10;
 }
 
+.survivor-start-btn.hidden {
+  display: none;
+}
+
 #survivor-canvas {
   display: block;
   max-width: 100%;
