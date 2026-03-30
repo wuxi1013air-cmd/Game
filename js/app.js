@@ -210,6 +210,7 @@ const survivorCardModal = document.getElementById("survivor-card-modal");
 const survivorCardGrid = document.getElementById("survivor-card-grid");
 const survivorCardTitle = document.getElementById("survivor-card-modal-title");
 const survivorCardSub = document.getElementById("survivor-card-modal-sub");
+const survivorCardReroll = document.getElementById("survivor-card-reroll");
 
 function hideSurvivorCardModal() {
   if (!survivorCardModal) return;
@@ -229,6 +230,41 @@ const survivorRemainingEl = document.getElementById("survivor-remaining");
 const survivorSubEl = document.getElementById("survivor-sub");
 const survivorStartBtn = document.getElementById("survivor-start");
 
+function renderSurvivorCardOffer({ options, rerollsLeft = 3, rerollsMax = 3 }) {
+  survivorCardTitle.textContent = "升级";
+  survivorCardSub.textContent = "";
+  survivorCardGrid.innerHTML = "";
+  for (const opt of options) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "survivor-card-btn";
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "survivor-card-btn__title";
+    titleSpan.textContent = opt.title;
+    btn.appendChild(titleSpan);
+    const descSpan = document.createElement("span");
+    descSpan.className = "survivor-card-btn__desc";
+    descSpan.textContent = opt.desc;
+    btn.appendChild(descSpan);
+    if (opt.note) {
+      const noteSpan = document.createElement("span");
+      noteSpan.className = "survivor-card-btn__note";
+      noteSpan.textContent = opt.note;
+      btn.appendChild(noteSpan);
+    }
+    btn.addEventListener("click", () => {
+      survivorApi.pickCard(opt.id);
+      hideSurvivorCardModal();
+    });
+    survivorCardGrid.appendChild(btn);
+  }
+  if (survivorCardReroll) {
+    survivorCardReroll.textContent = `随机 (${rerollsLeft}/${rerollsMax})`;
+    survivorCardReroll.disabled = rerollsLeft <= 0;
+  }
+  showSurvivorCardModal();
+}
+
 const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
   onHud: ({ hp, maxHp, wave, sub, remaining }) => {
     survivorHpEl.textContent = `${hp} / ${maxHp}`;
@@ -236,36 +272,7 @@ const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
     survivorRemainingEl.textContent = String(remaining ?? 0);
     survivorSubEl.textContent = sub || "";
   },
-  onOfferCards: ({ level, options }) => {
-    survivorCardTitle.textContent = `升级`;
-    survivorCardSub.textContent = "";
-    survivorCardGrid.innerHTML = "";
-    for (const opt of options) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "survivor-card-btn";
-      const titleSpan = document.createElement("span");
-      titleSpan.className = "survivor-card-btn__title";
-      titleSpan.textContent = opt.title;
-      btn.appendChild(titleSpan);
-      const descSpan = document.createElement("span");
-      descSpan.className = "survivor-card-btn__desc";
-      descSpan.textContent = opt.desc;
-      btn.appendChild(descSpan);
-      if (opt.note) {
-        const noteSpan = document.createElement("span");
-        noteSpan.className = "survivor-card-btn__note";
-        noteSpan.textContent = opt.note;
-        btn.appendChild(noteSpan);
-      }
-      btn.addEventListener("click", () => {
-        survivorApi.pickCard(opt.id);
-        hideSurvivorCardModal();
-      });
-      survivorCardGrid.appendChild(btn);
-    }
-    showSurvivorCardModal();
-  },
+  onOfferCards: (payload) => renderSurvivorCardOffer(payload),
   onHideCards: () => {
     hideSurvivorCardModal();
   },
@@ -280,6 +287,13 @@ const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
     showOverlay("胜利", "五边形 Boss 已被击毁！通关！");
   },
 });
+
+if (survivorCardReroll) {
+  survivorCardReroll.addEventListener("click", () => {
+    if (survivorCardReroll.disabled) return;
+    survivorApi.rerollCardChoices();
+  });
+}
 
 survivorStartBtn.addEventListener("click", () => {
   survivorStartBtn.classList.add("hidden");

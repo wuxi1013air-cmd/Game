@@ -3,7 +3,7 @@
  */
 
 const PLAYER_MAX_HP = 120;
-const PLAYER_SPEED = 4.15 * 0.94;
+const PLAYER_SPEED = 4.15 * 0.94 * 0.95;
 /** 碰撞半径（小于视觉三角） */
 const PLAYER_HIT_R = 6.5;
 /** 三角外形半径 */
@@ -17,8 +17,11 @@ const COUNTDOWN_MS = 5000;
 const BOSS_WAVE = 12;
 
 const LEVEL_MAX = 15;
-const XP_DROP_CHANCE = 0.7;
+const XP_DROP_CHANCE = 0.85;
 const XP_PER_ORB = 14;
+const TANK_FIRST_WAVE = 3;
+const BOSS_TANK_CAP = 3;
+const ENEMY_SEPARATION_GAP = 2.5;
 const PICKUP_RADIUS = 35;
 const ORB_FLY_SPEED = 14;
 const ORB_VISUAL_R = 3.5;
@@ -35,6 +38,9 @@ function xpToNext(level) {
 const ENEMY_HIT_R = 6;
 const BOSS_HIT_R = 30;
 const BOSS_VISUAL_R = 36;
+const TANK_HIT_R = BOSS_HIT_R / 4;
+const TANK_VISUAL_R = BOSS_VISUAL_R / 4;
+const TANK_DMG_FACTOR = 1 / 1.5;
 
 const BOSS_SPAWN_DELAY_MS = 900;
 /** 每波首只怪出现前的延迟（进场时场上为空） */
@@ -154,10 +160,11 @@ export function createSurvivor(canvas, hooks) {
   let moveSpeedMult = 1;
   let critChance = 0;
   let weakpointEverInOffer = false;
+  let cardRerollsLeft = 3;
 
   /** @type {{ x: number; y: number; vx: number; vy: number; dmg: number; pierceLeft: number }[]} */
   let bullets = [];
-  /** @type {{ x: number; y: number; kind: 'square' | 'boss'; hp: number; maxHp: number; r: number; speed: number; contactDmg: number; rot: number; hitFlashMs: number }[]} */
+  /** @type {{ x: number; y: number; kind: 'square' | 'boss' | 'tank'; hp: number; maxHp: number; r: number; speed: number; contactDmg: number; rot: number; hitFlashMs: number }[]} */
   let enemies = [];
   let xpOrbs = [];
   let xp = 0;
@@ -174,6 +181,10 @@ export function createSurvivor(canvas, hooks) {
   let waveSpawnedCount = 0;
   let spawnAccMs = 0;
   let bossSpawned = false;
+  let tankWaveTarget = 0;
+  let tankWaveSpawned = 0;
+  let tankSpawnAccMs = 0;
+  let bossTankSpawnAccMs = 0;
 
   const margin = PLAYER_HIT_R + 6;
 
@@ -186,7 +197,9 @@ export function createSurvivor(canvas, hooks) {
   function syncHud() {
     const remaining = (wave === BOSS_WAVE && bossSpawned)
       ? enemies.length
-      : Math.max(0, waveSpawnTarget - waveSpawnedCount) + enemies.length;
+      : Math.max(0, waveSpawnTarget - waveSpawnedCount)
+          + Math.max(0, tankWaveTarget - tankWaveSpawned)
+          + enemies.length;
     hooks.onHud({
       hp: Math.max(0, Math.ceil(hp)),
       maxHp: PLAYER_MAX_HP,
@@ -215,6 +228,7 @@ export function createSurvivor(canvas, hooks) {
     moveSpeedMult = 1;
     critChance = 0;
     weakpointEverInOffer = false;
+    cardRerollsLeft = 3;
     bullets = [];
     enemies = [];
     xpOrbs = [];
@@ -228,6 +242,10 @@ export function createSurvivor(canvas, hooks) {
     waveSpawnedCount = 0;
     spawnAccMs = 0;
     bossSpawned = false;
+    tankWaveTarget = 0;
+    tankWaveSpawned = 0;
+    tankSpawnAccMs = 0;
+    bossTankSpawnAccMs = 0;
     syncHud();
   }
 
@@ -265,6 +283,28 @@ export function createSurvivor(canvas, hooks) {
     });
   }
 
+  function spawnTankAtEdge() {
+    const p = randomEdgePoint();
+    const dmg = normalEnemyContactDamage(wave);
+    const minionSpd = Math.min(1.8 + wave * 0.08, 2.8);
+    const spd = minionSpd * 1.1;
+    const minionHp = Math.round(17 + wave * 6 + Math.floor(wave / 3) * 5);
+    const hpMult = 2 + Math.floor(Math.random() * 2);
+    const hpVal = Math.round(minionHp * hpMult);
+    enemies.push({
+      x: p.x,
+      y: p.y,
+      kind: "tank",
+      hp: hpVal,
+      maxHp: hpVal,
+      r: TANK_HIT_R,
+      speed: spd,
+      contactDmg: dmg,
+      rot: Math.random() * Math.PI,
+      hitFlashMs: 0,
+    });
+  }
+
   function spawnBossAtEdge() {
     const p = randomEdgePoint();
     enemies.push({
@@ -287,11 +327,19 @@ export function createSurvivor(canvas, hooks) {
     pendingShots = [];
     waveSpawnedCount = 0;
     spawnAccMs = 0;
+    tankWaveSpawned = 0;
+    tankSpawnAccMs = 0;
+    bossTankSpawnAccMs = 0;
     if (wave === BOSS_WAVE) {
       waveSpawnTarget = 0;
+      tankWaveTarget = 0;
       bossSpawned = false;
     } else {
       waveSpawnTarget = 5 + wave * 3 + Math.floor((wave - 1) / 2);
+      tankWaveTarget =
+        wave >= TANK_FIRST_WAVE
+          ? Math.min(5, 3 + Math.floor((wave - TANK_FIRST_WAVE) / 2))
+          : 0;
     }
   }
 
@@ -408,7 +456,24 @@ export function createSurvivor(canvas, hooks) {
     phase = "cards";
     syncHud();
     const options = pickThreeCardsInternal();
-    hooks.onOfferCards({ level, options });
+    hooks.onOfferCards({
+      level,
+      options,
+      rerollsLeft: cardRerollsLeft,
+      rerollsMax: 3,
+    });
+  }
+
+  function rerollCardChoices() {
+    if (phase !== "cards" || cardRerollsLeft <= 0) return;
+    cardRerollsLeft--;
+    const options = pickThreeCardsInternal();
+    hooks.onOfferCards({
+      level,
+      options,
+      rerollsLeft: cardRerollsLeft,
+      rerollsMax: 3,
+    });
   }
 
   function pickCard(cardId) {
@@ -428,8 +493,12 @@ export function createSurvivor(canvas, hooks) {
     if (wave === BOSS_WAVE) {
       return bossSpawned && !enemies.some(e => e.kind === "boss");
     }
-    if (waveSpawnTarget <= 0) return false;
-    return waveSpawnedCount >= waveSpawnTarget && enemies.length === 0;
+    if (waveSpawnTarget <= 0 && tankWaveTarget <= 0) return false;
+    return (
+      waveSpawnedCount >= waveSpawnTarget
+      && tankWaveSpawned >= tankWaveTarget
+      && enemies.length === 0
+    );
   }
 
   function tick(now) {
@@ -495,6 +564,17 @@ export function createSurvivor(canvas, hooks) {
             spawnSquareAtEdge();
             waveSpawnedCount++;
           }
+          bossTankSpawnAccMs += dt;
+          const tankIv = interval * 1.35;
+          let tGuard = 8;
+          while (
+            tGuard-- > 0
+            && bossTankSpawnAccMs >= tankIv
+            && enemies.filter((e) => e.kind === "tank").length < BOSS_TANK_CAP
+          ) {
+            bossTankSpawnAccMs -= tankIv;
+            spawnTankAtEdge();
+          }
         }
       } else {
         const interval = spawnIntervalForWave(wave);
@@ -506,6 +586,18 @@ export function createSurvivor(canvas, hooks) {
           spawnAccMs -= threshold;
           spawnSquareAtEdge();
           waveSpawnedCount++;
+        }
+        if (wave >= TANK_FIRST_WAVE && tankWaveSpawned < tankWaveTarget) {
+          tankSpawnAccMs += dt;
+          let tg = 40;
+          while (tg-- > 0 && tankWaveSpawned < tankWaveTarget) {
+            const tThr =
+              tankWaveSpawned === 0 ? FIRST_SPAWN_DELAY_MS + 400 : interval * 1.12;
+            if (tankSpawnAccMs < tThr) break;
+            tankSpawnAccMs -= tThr;
+            spawnTankAtEdge();
+            tankWaveSpawned++;
+          }
         }
       }
     }
@@ -539,8 +631,39 @@ export function createSurvivor(canvas, hooks) {
       const d = Math.hypot(dx, dy) || 1;
       e.x += (dx / d) * e.speed * step;
       e.y += (dy / d) * e.speed * step;
-      e.rot += (dt / 400) * (e.kind === "boss" ? 0.35 : 1.1);
+      e.rot += (dt / 400) * (e.kind === "boss" ? 0.35 : e.kind === "tank" ? 0.65 : 1.1);
       e.hitFlashMs = Math.max(0, e.hitFlashMs - dt);
+    }
+
+    const edgePad = 4;
+    for (let i = 0; i < enemies.length; i++) {
+      for (let j = i + 1; j < enemies.length; j++) {
+        const a = enemies[i];
+        const b = enemies[j];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let d = Math.hypot(dx, dy);
+        const minD = a.r + b.r + ENEMY_SEPARATION_GAP;
+        if (d < 1e-4) {
+          const ang = Math.random() * Math.PI * 2;
+          dx = Math.cos(ang);
+          dy = Math.sin(ang);
+          d = 1;
+        }
+        if (d < minD) {
+          const push = (minD - d) * 0.5;
+          const nx = dx / d;
+          const ny = dy / d;
+          a.x -= nx * push;
+          a.y -= ny * push;
+          b.x += nx * push;
+          b.y += ny * push;
+        }
+      }
+    }
+    for (const e of enemies) {
+      e.x = Math.max(e.r + edgePad, Math.min(W - e.r - edgePad, e.x));
+      e.y = Math.max(e.r + edgePad, Math.min(H - e.r - edgePad, e.y));
     }
 
     for (let bi = bullets.length - 1; bi >= 0; bi--) {
@@ -552,13 +675,32 @@ export function createSurvivor(canvas, hooks) {
         if (hi === -1) break;
         const e = enemies[hi];
         let hitDmg = b.dmg;
+        if (e.kind === "tank") hitDmg *= TANK_DMG_FACTOR;
         if (critChance > 0 && Math.random() < critChance) hitDmg *= CRIT_MULT;
         e.hp -= hitDmg;
         e.hitFlashMs = ENEMY_HIT_FLASH_MS;
         b.pierceLeft -= 1;
         if (e.hp <= 0) {
-          if (e.kind !== "boss" && level < LEVEL_MAX && Math.random() < XP_DROP_CHANCE) {
-            xpOrbs.push({ x: e.x, y: e.y, value: XP_PER_ORB, collecting: false, collected: false });
+          if (e.kind !== "boss" && level < LEVEL_MAX) {
+            if (e.kind === "tank") {
+              xpOrbs.push({
+                x: e.x,
+                y: e.y,
+                value: XP_PER_ORB * 2,
+                kind: "blue",
+                collecting: false,
+                collected: false,
+              });
+            } else if (Math.random() < XP_DROP_CHANCE) {
+              xpOrbs.push({
+                x: e.x,
+                y: e.y,
+                value: XP_PER_ORB,
+                kind: "green",
+                collecting: false,
+                collected: false,
+              });
+            }
           }
           enemies.splice(hi, 1);
         }
@@ -675,6 +817,18 @@ export function createSurvivor(canvas, hooks) {
         ctx.strokeStyle = "rgba(255,255,255,0.3)";
         ctx.lineWidth = 0.5;
         ctx.strokeRect(barX, barY, barW, barH);
+      } else if (e.kind === "tank") {
+        const hit = e.hitFlashMs > 0;
+        drawPolygon(
+          ctx,
+          e.x,
+          e.y,
+          TANK_VISUAL_R,
+          6,
+          e.rot,
+          hit ? "rgba(147, 197, 253, 0.65)" : "rgba(59, 130, 246, 0.45)",
+          hit ? "#93c5fd" : "#3b82f6",
+        );
       } else {
         ctx.save();
         ctx.translate(e.x, e.y);
@@ -694,9 +848,10 @@ export function createSurvivor(canvas, hooks) {
       if (orb.collected) continue;
       ctx.beginPath();
       ctx.arc(orb.x, orb.y, ORB_VISUAL_R, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
+      const blue = orb.kind === "blue";
+      ctx.fillStyle = blue ? "rgba(96, 165, 250, 0.9)" : "rgba(34, 197, 94, 0.85)";
       ctx.fill();
-      ctx.strokeStyle = "#4ade80";
+      ctx.strokeStyle = blue ? "#60a5fa" : "#4ade80";
       ctx.lineWidth = 1;
       ctx.stroke();
     }
@@ -787,5 +942,6 @@ export function createSurvivor(canvas, hooks) {
       if (dir in keys) keys[dir] = down;
     },
     pickCard,
+    rerollCardChoices,
   };
 }

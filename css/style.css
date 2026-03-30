@@ -958,7 +958,7 @@ main {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 520px;
+  max-width: min(960px, 100vw - 2rem);
   padding: 1.35rem 1.25rem;
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -981,8 +981,26 @@ main {
 
 .survivor-card-grid {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: nowrap;
   gap: 0.65rem;
+  justify-content: center;
+  align-items: stretch;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.survivor-card-reroll-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.survivor-card-reroll-row .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .survivor-card-btn {
@@ -990,8 +1008,10 @@ main {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.25rem;
-  width: 100%;
-  padding: 0.85rem 1rem;
+  flex: 1 1 0;
+  min-width: 7.5rem;
+  max-width: 16rem;
+  padding: 0.85rem 0.75rem;
   text-align: left;
   font-family: inherit;
   font-size: 0.95rem;
