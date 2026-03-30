@@ -54,12 +54,15 @@ function spawnIntervalForWave(w) {
 
 /**
  * 升级卡牌（CARD_DEFS 展示 / applyCard 数值）：
- * multishot +1 扇面；bulletcount +1 每道子弹发数；damage ×1.15；pierce +1；
- * atkspd ×1.08；heavyfire ×1.15 伤害且移速×0.97；weakpoint 暴击率 5%、暴伤×1.33（仅可出现一次于选项中）。
+ * multishot +1 弹道；bulletcount +1 子弹数量；damage ×1.15；pierce +1；atkspd ×1.08；
+ * heavyfire ×1.15 攻、移速×0.97；swiftwalk 移速×1.06；fullheal 回满血；
+ * weakpoint 暴击 5%、暴伤×1.33（选项中最多一次）。多弹道夹角见 VOLLEY_SPREAD_RAD。
  */
+const VOLLEY_SPREAD_RAD = 0.062;
+
 const CARD_DEFS = {
-  multishot: { title: "区域火力", desc: "区域火力 +1" },
-  bulletcount: { title: "火力翻倍", desc: "火力翻倍 +1" },
+  multishot: { title: "区域火力", desc: "弹道 +1" },
+  bulletcount: { title: "火力翻倍", desc: "子弹数量 +1" },
   damage: { title: "精良火药", desc: "增加攻击力" },
   pierce: { title: "贯穿", desc: "贯穿 +1" },
   atkspd: { title: "快枪手", desc: "增加攻速" },
@@ -67,6 +70,16 @@ const CARD_DEFS = {
     title: "重火力",
     desc: "增加更多的攻击力，略微降低移速。",
     note: "真是一把不错的枪，但是对我来说太重了些",
+  },
+  swiftwalk: {
+    title: "健步如飞",
+    desc: "增加6%移速",
+    note: "好马配好鞍，好鞋配好人",
+  },
+  fullheal: {
+    title: "生命恢复",
+    desc: "回复至满血",
+    note: "多抗一枪",
   },
   weakpoint: {
     title: "弱点打击",
@@ -374,7 +387,7 @@ export function createSurvivor(canvas, hooks) {
     let delay = 0;
     let lastT = t0;
     for (let s = 0; s < shotsPerVolley; s++) {
-      const shotOff = (s - (shotsPerVolley - 1) / 2) * 0.09;
+      const shotOff = (s - (shotsPerVolley - 1) / 2) * VOLLEY_SPREAD_RAD;
       const ang = gunAngle + shotOff;
       for (let b = 0; b < bulletCount; b++) {
         const spawnAt = t0 + delay;
@@ -417,6 +430,12 @@ export function createSurvivor(canvas, hooks) {
         break;
       case "weakpoint":
         critChance = 0.05;
+        break;
+      case "swiftwalk":
+        moveSpeedMult *= 1.06;
+        break;
+      case "fullheal":
+        hp = PLAYER_MAX_HP;
         break;
       default:
         break;
