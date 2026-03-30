@@ -267,7 +267,7 @@ function renderSurvivorCardOffer({ options, rerollsLeft = 3, rerollsMax = 3 }) {
 
 const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
   onHud: ({ hp, maxHp, wave, sub, remaining }) => {
-    survivorHpEl.textContent = `${hp} / ${maxHp}`;
+    survivorHpEl.textContent = `${hp}/${maxHp}`;
     survivorWaveEl.textContent = String(wave);
     survivorRemainingEl.textContent = String(remaining ?? 0);
     survivorSubEl.textContent = sub || "";

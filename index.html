@@ -148,7 +148,7 @@
       <div class="game-toolbar">
         <button type="button" class="btn ghost" data-back>← 返回</button>
         <div class="stats survivor-toolbar-stats">
-          <span>生命 <strong id="survivor-hp">120</strong> / 120</span>
+          <span>生命 <strong id="survivor-hp">120/120</strong></span>
           <span>波次 <strong id="survivor-wave">1</strong></span>
           <span>剩余 <strong id="survivor-remaining">0</strong></span>
           <span id="survivor-sub" class="survivor-sub"></span>
@@ -156,6 +156,18 @@
         <button type="button" class="btn" id="survivor-restart">重新开始</button>
       </div>
       <p class="survivor-hint">WASD 或方向键移动；手枪自动索敌。击杀敌人有概率掉落经验，拾取升级三选一；等级上限 15。普通为小型方形；第 12 波为五边形 Boss。每波清完后倒计时进入下一波。</p>
+      <details class="survivor-skill-details">
+        <summary>技能列表</summary>
+        <ul class="survivor-skill-list">
+          <li><strong>区域火力</strong>：扇面方向 +1</li>
+          <li><strong>火力翻倍</strong>：每条弹道子弹发数 +1</li>
+          <li><strong>精良火药</strong>：增加攻击力（伤害倍率提升）</li>
+          <li><strong>贯穿</strong>：穿透 +1</li>
+          <li><strong>快枪手</strong>：增加攻速</li>
+          <li><strong>重火力</strong>：更多攻击力，略微降低移速</li>
+          <li><strong>弱点打击</strong>：暴击（选项中最多出现一次）</li>
+        </ul>
+      </details>
       <div class="survivor-wrap">
         <canvas id="survivor-canvas" width="1920" height="1080" aria-label="三角幸存者游戏区域" tabindex="0"></canvas>
         <button type="button" class="btn survivor-start-btn" id="survivor-start">开始游戏</button>

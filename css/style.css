@@ -1006,12 +1006,14 @@ main {
 .survivor-card-btn {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0.25rem;
-  flex: 1 1 0;
-  min-width: 7.5rem;
-  max-width: 16rem;
-  padding: 0.85rem 0.75rem;
+  align-items: stretch;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 8.75rem;
+  aspect-ratio: 1 / 2.14;
+  height: auto;
+  padding: 0.75rem 0.65rem 0.65rem;
+  gap: 0.35rem;
   text-align: left;
   font-family: inherit;
   font-size: 0.95rem;
@@ -1029,23 +1031,59 @@ main {
 }
 
 .survivor-card-btn__title {
+  flex-shrink: 0;
+  align-self: flex-start;
+  text-align: left;
   font-weight: 700;
+  font-size: 1.12rem;
+  line-height: 1.25;
   color: var(--accent);
 }
 
 .survivor-card-btn__desc {
-  font-size: 0.8rem;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.88rem;
   color: var(--muted);
-  line-height: 1.4;
+  line-height: 1.45;
+  min-height: 0;
 }
 
 .survivor-card-btn__note {
+  flex-shrink: 0;
   display: block;
-  font-size: 0.68rem;
+  margin-top: auto;
+  align-self: flex-start;
+  text-align: left;
+  font-size: 0.58rem;
   color: var(--muted);
-  opacity: 0.85;
-  line-height: 1.35;
+  opacity: 0.88;
+  line-height: 1.32;
   font-weight: 400;
+}
+
+.survivor-skill-details {
+  max-width: 52rem;
+  margin: 0 auto 0.75rem;
+  padding: 0 0.5rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.survivor-skill-details summary {
+  cursor: pointer;
+  color: var(--accent-dim);
+  font-weight: 600;
+  list-style-position: outside;
+}
+
+.survivor-skill-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  line-height: 1.55;
 }
 
 .solitaire {

@@ -38,8 +38,9 @@ function xpToNext(level) {
 const ENEMY_HIT_R = 6;
 const BOSS_HIT_R = 30;
 const BOSS_VISUAL_R = 36;
-const TANK_HIT_R = BOSS_HIT_R / 4;
-const TANK_VISUAL_R = BOSS_VISUAL_R / 4;
+/** 六边形坦克：相对原 Boss 1/4 尺寸的体积翻倍（半径 ×2，平面面积约 ×4） */
+const TANK_HIT_R = BOSS_HIT_R / 2;
+const TANK_VISUAL_R = BOSS_VISUAL_R / 2;
 const TANK_DMG_FACTOR = 1 / 1.5;
 
 const BOSS_SPAWN_DELAY_MS = 900;
