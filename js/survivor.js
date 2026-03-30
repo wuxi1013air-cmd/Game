@@ -8,8 +8,8 @@ const PLAYER_SPEED = 4.15;
 const PLAYER_HIT_R = 6.5;
 /** 三角外形半径 */
 const TRI_VISUAL_R = 9;
-const BASE_FIRE_MS = 520;
-const BULLET_SPEED = 10;
+const BASE_FIRE_MS = 620;
+const BULLET_SPEED = 8.5;
 const BULLET_R = 2.4;
 const BASE_BULLET_DMG = 11;
 const INVULN_MS = 900;
@@ -18,8 +18,8 @@ const BOSS_WAVE = 2;
 
 /** 普通怪碰撞半径（方形视觉略大于 r） */
 const ENEMY_HIT_R = 6;
-const BOSS_HIT_R = 20;
-const BOSS_VISUAL_R = 24;
+const BOSS_HIT_R = 30;
+const BOSS_VISUAL_R = 36;
 
 const BOSS_SPAWN_DELAY_MS = 900;
 /** 每波首只怪出现前的延迟（进场时场上为空） */
@@ -31,7 +31,8 @@ function spawnIntervalForWave(w) {
 }
 
 const CARD_DEFS = {
-  multishot: { title: "弹幕", desc: "每次开火子弹数量 +1" },
+  multishot: { title: "弹道", desc: "弹道数量 +1（增加射击方向扇面）" },
+  bulletcount: { title: "子弹", desc: "每条弹道子弹数量 +1" },
   damage: { title: "强装药", desc: "子弹伤害 ×1.3" },
   pierce: { title: "穿透", desc: "穿透 +1：子弹被第 n+1 个敌人阻挡（穿透与阻挡均造成伤害）" },
   atkspd: { title: "急速", desc: "攻速 ×1.5" },
@@ -126,8 +127,8 @@ export function createSurvivor(canvas, hooks) {
   let gunAngle = -Math.PI / 2;
   let fireAcc = 0;
 
-  let pistolCount = 1;
   let shotsPerVolley = 1;
+  let bulletCount = 1;
   let damageMult = 1;
   let pierceExtra = 0;
   let atkSpdMult = 1;
@@ -177,8 +178,8 @@ export function createSurvivor(canvas, hooks) {
     headAngle = -Math.PI / 2;
     gunAngle = -Math.PI / 2;
     fireAcc = 0;
-    pistolCount = 1;
     shotsPerVolley = 1;
+    bulletCount = 1;
     damageMult = 1;
     pierceExtra = 0;
     atkSpdMult = 1;
@@ -210,7 +211,7 @@ export function createSurvivor(canvas, hooks) {
   function spawnSquareAtEdge() {
     const p = randomEdgePoint();
     const dmg = normalEnemyContactDamage(wave);
-    const spd = Math.min(1.38 + wave * 0.065, 2.35);
+    const spd = Math.min(1.8 + wave * 0.08, 2.8);
     const hpVal = Math.round(17 + wave * 6 + Math.floor(wave / 3) * 5);
     enemies.push({
       x: p.x,
@@ -269,12 +270,11 @@ export function createSurvivor(canvas, hooks) {
 
   function fireVolley() {
     const muzzle = TRI_VISUAL_R * 0.35 + 10;
-    for (let p = 0; p < pistolCount; p++) {
-      const pistolOff = (p - (pistolCount - 1) / 2) * 0.14;
-      for (let s = 0; s < shotsPerVolley; s++) {
-        const shotOff = (s - (shotsPerVolley - 1) / 2) * 0.09;
-        const ang = gunAngle + pistolOff + shotOff;
-        const dmg = BASE_BULLET_DMG * damageMult;
+    for (let s = 0; s < shotsPerVolley; s++) {
+      const shotOff = (s - (shotsPerVolley - 1) / 2) * 0.09;
+      const ang = gunAngle + shotOff;
+      const dmg = BASE_BULLET_DMG * damageMult;
+      for (let b = 0; b < bulletCount; b++) {
         bullets.push({
           x: px + Math.cos(ang) * muzzle,
           y: py + Math.sin(ang) * muzzle,
@@ -291,6 +291,9 @@ export function createSurvivor(canvas, hooks) {
     switch (id) {
       case "multishot":
         shotsPerVolley += 1;
+        break;
+      case "bulletcount":
+        bulletCount += 1;
         break;
       case "damage":
         damageMult *= 1.3;
@@ -580,20 +583,14 @@ export function createSurvivor(canvas, hooks) {
       ctx.stroke();
     }
 
-    const blink = invulnMs > 0 && Math.floor(invulnMs / 100) % 2 === 0;
+    const hurt = invulnMs > 0;
+    const blink = hurt && Math.floor(invulnMs / 100) % 2 === 0;
+    const triFill = blink ? "rgba(239, 68, 68, 0.8)" : "rgba(110, 231, 183, 0.88)";
+    const triStroke = blink ? "#ef4444" : "#6ee7b7";
     ctx.save();
     ctx.translate(px, py);
     ctx.rotate(headAngle + Math.PI / 2);
-    drawPolygon(
-      ctx,
-      0,
-      0,
-      TRI_VISUAL_R,
-      3,
-      0,
-      blink ? "rgba(110, 231, 183, 0.35)" : "rgba(110, 231, 183, 0.88)",
-      "#6ee7b7",
-    );
+    drawPolygon(ctx, 0, 0, TRI_VISUAL_R, 3, 0, triFill, triStroke);
     ctx.restore();
 
     ctx.save();
@@ -608,6 +605,19 @@ export function createSurvivor(canvas, hooks) {
       drawPistolAtOrigin(ctx);
     }
     ctx.restore();
+
+    const pBarW = TRI_VISUAL_R * 2.5;
+    const pBarH = 3;
+    const pBarX = px - pBarW / 2;
+    const pBarY = py + TRI_VISUAL_R + 4;
+    const pHpRatio = Math.max(0, hp / PLAYER_MAX_HP);
+    ctx.fillStyle = "#ef4444";
+    ctx.fillRect(pBarX, pBarY, pBarW, pBarH);
+    ctx.fillStyle = "#22c55e";
+    ctx.fillRect(pBarX, pBarY, pBarW * pHpRatio, pBarH);
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(pBarX, pBarY, pBarW, pBarH);
 
     if (phase === "countdown") {
       const sec = Math.max(0, Math.ceil(countdownMs / 1000));
