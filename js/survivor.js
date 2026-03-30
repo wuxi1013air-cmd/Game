@@ -72,7 +72,17 @@ function drawPolygon(ctx, x, y, r, sides, rotation, fill, stroke) {
   }
 }
 
-/** 在 (0,0) 绘制，枪管沿 +X，稍后会用 rotate(aimAngle) 对准目标 */
+const GUN_LERP_SPEED = 0.18;
+const HEAD_LERP_SPEED = 0.22;
+
+function lerpAngle(from, to, t) {
+  let diff = to - from;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return from + diff * t;
+}
+
+/** 在 (0,0) 绘制，枪管沿 +X */
 function drawPistolAtOrigin(ctx) {
   ctx.fillStyle = "#475569";
   ctx.beginPath();
@@ -112,7 +122,8 @@ export function createSurvivor(canvas, hooks) {
   let invulnMs = 0;
   let px = W / 2;
   let py = H / 2;
-  let aimAngle = -Math.PI / 2;
+  let headAngle = -Math.PI / 2;
+  let gunAngle = -Math.PI / 2;
   let fireAcc = 0;
 
   let pistolCount = 1;
@@ -132,6 +143,7 @@ export function createSurvivor(canvas, hooks) {
   let waveSpawnTarget = 0;
   let waveSpawnedCount = 0;
   let spawnAccMs = 0;
+  let bossSpawned = false;
 
   const margin = PLAYER_HIT_R + 6;
 
@@ -142,7 +154,9 @@ export function createSurvivor(canvas, hooks) {
   }
 
   function syncHud(sub = "") {
-    const remaining = Math.max(0, waveSpawnTarget - waveSpawnedCount) + enemies.length;
+    const remaining = (wave === BOSS_WAVE && bossSpawned)
+      ? enemies.length
+      : Math.max(0, waveSpawnTarget - waveSpawnedCount) + enemies.length;
     hooks.onHud({
       hp: Math.max(0, Math.ceil(hp)),
       maxHp: PLAYER_MAX_HP,
@@ -160,7 +174,8 @@ export function createSurvivor(canvas, hooks) {
     invulnMs = 0;
     px = W / 2;
     py = H / 2;
-    aimAngle = -Math.PI / 2;
+    headAngle = -Math.PI / 2;
+    gunAngle = -Math.PI / 2;
     fireAcc = 0;
     pistolCount = 1;
     shotsPerVolley = 1;
@@ -173,6 +188,7 @@ export function createSurvivor(canvas, hooks) {
     waveSpawnTarget = 0;
     waveSpawnedCount = 0;
     spawnAccMs = 0;
+    bossSpawned = false;
     syncHud("");
   }
 
@@ -218,7 +234,7 @@ export function createSurvivor(canvas, hooks) {
       hp: 10000,
       maxHp: 10000,
       r: BOSS_HIT_R,
-      speed: 0.78,
+      speed: 1.5,
       contactDmg: 50,
       rot: 0,
     });
@@ -231,7 +247,8 @@ export function createSurvivor(canvas, hooks) {
     waveSpawnedCount = 0;
     spawnAccMs = 0;
     if (wave === BOSS_WAVE) {
-      waveSpawnTarget = 1;
+      waveSpawnTarget = 0;
+      bossSpawned = false;
     } else {
       waveSpawnTarget = 5 + wave * 3 + Math.floor((wave - 1) / 2);
     }
@@ -251,14 +268,12 @@ export function createSurvivor(canvas, hooks) {
   }
 
   function fireVolley() {
-    const target = nearestEnemy();
-    if (target) aimAngle = Math.atan2(target.y - py, target.x - px);
     const muzzle = TRI_VISUAL_R * 0.35 + 10;
     for (let p = 0; p < pistolCount; p++) {
       const pistolOff = (p - (pistolCount - 1) / 2) * 0.14;
       for (let s = 0; s < shotsPerVolley; s++) {
         const shotOff = (s - (shotsPerVolley - 1) / 2) * 0.09;
-        const ang = aimAngle + pistolOff + shotOff;
+        const ang = gunAngle + pistolOff + shotOff;
         const dmg = BASE_BULLET_DMG * damageMult;
         bullets.push({
           x: px + Math.cos(ang) * muzzle,
@@ -326,6 +341,9 @@ export function createSurvivor(canvas, hooks) {
   }
 
   function waveFullyComplete() {
+    if (wave === BOSS_WAVE) {
+      return bossSpawned && !enemies.some(e => e.kind === "boss");
+    }
     if (waveSpawnTarget <= 0) return false;
     return waveSpawnedCount >= waveSpawnTarget && enemies.length === 0;
   }
@@ -347,9 +365,12 @@ export function createSurvivor(canvas, hooks) {
         const len = Math.hypot(mx, my);
         px += (mx / len) * PLAYER_SPEED * step;
         py += (my / len) * PLAYER_SPEED * step;
+        const moveAngle = Math.atan2(my, mx);
+        headAngle = lerpAngle(headAngle, moveAngle, 1 - Math.pow(1 - HEAD_LERP_SPEED, step));
       }
       px = Math.max(margin, Math.min(W - margin, px));
       py = Math.max(margin, Math.min(H - margin, py));
+      gunAngle = lerpAngle(gunAngle, headAngle, 1 - Math.pow(1 - GUN_LERP_SPEED, step));
 
       countdownMs -= dt;
       const sec = Math.ceil(countdownMs / 1000);
@@ -382,18 +403,34 @@ export function createSurvivor(canvas, hooks) {
       const len = Math.hypot(mx, my);
       px += (mx / len) * PLAYER_SPEED * step;
       py += (my / len) * PLAYER_SPEED * step;
+      const moveAngle = Math.atan2(my, mx);
+      headAngle = lerpAngle(headAngle, moveAngle, 1 - Math.pow(1 - HEAD_LERP_SPEED, step));
     }
     px = Math.max(margin, Math.min(W - margin, px));
     py = Math.max(margin, Math.min(H - margin, py));
 
     const nearest = nearestEnemy();
-    if (nearest) aimAngle = Math.atan2(nearest.y - py, nearest.x - px);
+    const gunTarget = nearest ? Math.atan2(nearest.y - py, nearest.x - px) : headAngle;
+    gunAngle = lerpAngle(gunAngle, gunTarget, 1 - Math.pow(1 - GUN_LERP_SPEED, step));
 
     if (wave === BOSS_WAVE) {
       spawnAccMs += dt;
-      if (waveSpawnedCount < waveSpawnTarget && spawnAccMs >= BOSS_SPAWN_DELAY_MS) {
-        spawnBossAtEdge();
-        waveSpawnedCount = 1;
+      if (!bossSpawned) {
+        if (spawnAccMs >= BOSS_SPAWN_DELAY_MS) {
+          spawnBossAtEdge();
+          bossSpawned = true;
+          spawnAccMs = 0;
+        }
+      } else if (enemies.some(e => e.kind === "boss")) {
+        const interval = spawnIntervalForWave(wave);
+        let guard = 40;
+        while (guard-- > 0) {
+          const threshold = waveSpawnedCount === 0 ? FIRST_SPAWN_DELAY_MS : interval;
+          if (spawnAccMs < threshold) break;
+          spawnAccMs -= threshold;
+          spawnSquareAtEdge();
+          waveSpawnedCount++;
+        }
       }
     } else {
       const interval = spawnIntervalForWave(wave);
@@ -507,6 +544,18 @@ export function createSurvivor(canvas, hooks) {
           "rgba(244, 114, 182, 0.35)",
           "#f472b6",
         );
+        const barW = BOSS_VISUAL_R * 2;
+        const barH = 4;
+        const barX = e.x - barW / 2;
+        const barY = e.y + BOSS_VISUAL_R + 5;
+        const hpRatio = Math.max(0, e.hp / e.maxHp);
+        ctx.fillStyle = "#ef4444";
+        ctx.fillRect(barX, barY, barW, barH);
+        ctx.fillStyle = "#22c55e";
+        ctx.fillRect(barX, barY, barW * hpRatio, barH);
+        ctx.strokeStyle = "rgba(255,255,255,0.3)";
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(barX, barY, barW, barH);
       } else {
         ctx.save();
         ctx.translate(e.x, e.y);
@@ -534,7 +583,7 @@ export function createSurvivor(canvas, hooks) {
     const blink = invulnMs > 0 && Math.floor(invulnMs / 100) % 2 === 0;
     ctx.save();
     ctx.translate(px, py);
-    ctx.rotate(aimAngle + Math.PI / 2);
+    ctx.rotate(headAngle + Math.PI / 2);
     drawPolygon(
       ctx,
       0,
@@ -549,7 +598,7 @@ export function createSurvivor(canvas, hooks) {
 
     ctx.save();
     ctx.translate(px, py);
-    ctx.rotate(aimAngle);
+    ctx.rotate(gunAngle);
     if (typeof ctx.roundRect !== "function") {
       ctx.fillStyle = "#475569";
       ctx.fillRect(-2, -2.5, 13, 5);
@@ -561,13 +610,14 @@ export function createSurvivor(canvas, hooks) {
     ctx.restore();
 
     if (phase === "countdown") {
-      ctx.fillStyle = "rgba(0,0,0,0.45)";
-      ctx.fillRect(0, 0, W, H);
       const sec = Math.max(0, Math.ceil(countdownMs / 1000));
       ctx.font = "bold 64px 'JetBrains Mono', ui-monospace, monospace";
-      ctx.fillStyle = "#e8ecf4";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
+      ctx.strokeStyle = "rgba(0,0,0,0.6)";
+      ctx.lineWidth = 4;
+      ctx.strokeText(String(Math.max(1, sec)), W / 2, H / 2);
+      ctx.fillStyle = "rgba(232, 236, 244, 0.85)";
       ctx.fillText(String(Math.max(1, sec)), W / 2, H / 2);
     }
   }
