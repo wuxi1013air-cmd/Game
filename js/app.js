@@ -70,6 +70,7 @@ document.querySelectorAll("[data-back]").forEach((btn) => {
     breakoutApi.stop();
     survivorApi.stop();
     hideSurvivorCardModal();
+    survivorStartBtn.classList.add("hidden");
     showView("home");
   });
 });
@@ -226,6 +227,7 @@ const survivorHpEl = document.getElementById("survivor-hp");
 const survivorWaveEl = document.getElementById("survivor-wave");
 const survivorRemainingEl = document.getElementById("survivor-remaining");
 const survivorSubEl = document.getElementById("survivor-sub");
+const survivorStartBtn = document.getElementById("survivor-start");
 
 const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
   onHud: ({ hp, maxHp, wave, sub, remaining }) => {
@@ -234,9 +236,9 @@ const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
     survivorRemainingEl.textContent = String(remaining ?? 0);
     survivorSubEl.textContent = sub || "";
   },
-  onOfferCards: ({ wave, options }) => {
-    survivorCardTitle.textContent = `完成第 ${wave} 波`;
-    survivorCardSub.textContent = "三选一强化，选完后 5 秒出现下一波敌人";
+  onOfferCards: ({ level, options }) => {
+    survivorCardTitle.textContent = `升级`;
+    survivorCardSub.textContent = "";
     survivorCardGrid.innerHTML = "";
     for (const opt of options) {
       const btn = document.createElement("button");
@@ -262,9 +264,16 @@ const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
   },
 });
 
+survivorStartBtn.addEventListener("click", () => {
+  survivorStartBtn.classList.add("hidden");
+  survivorApi.start();
+  document.getElementById("survivor-canvas")?.focus({ preventScroll: true });
+});
+
 document.getElementById("survivor-restart").addEventListener("click", () => {
   hideOverlay();
   hideSurvivorCardModal();
+  survivorStartBtn.classList.add("hidden");
   survivorApi.reset();
   survivorApi.start();
 });
@@ -468,8 +477,7 @@ document.querySelectorAll(".game-card").forEach((card) => {
       hideSurvivorCardModal();
       showView("survivor");
       survivorApi.reset();
-      survivorApi.start();
-      document.getElementById("survivor-canvas")?.focus({ preventScroll: true });
+      survivorStartBtn.classList.remove("hidden");
     }
   });
 });

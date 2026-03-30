@@ -16,6 +16,12 @@ const INVULN_MS = 900;
 const COUNTDOWN_MS = 5000;
 const BOSS_WAVE = 2;
 
+const XP_PER_ORB = 10;
+const XP_TO_LEVEL_BASE = 50;
+const PICKUP_RADIUS = 35;
+const ORB_FLY_SPEED = 14;
+const ORB_VISUAL_R = 3.5;
+
 /** 普通怪碰撞半径（方形视觉略大于 r） */
 const ENEMY_HIT_R = 6;
 const BOSS_HIT_R = 30;
@@ -31,10 +37,10 @@ function spawnIntervalForWave(w) {
 }
 
 const CARD_DEFS = {
-  multishot: { title: "弹道", desc: "弹道数量 +1（增加射击方向扇面）" },
-  bulletcount: { title: "子弹", desc: "每条弹道子弹数量 +1" },
-  damage: { title: "强装药", desc: "子弹伤害 ×1.3" },
-  pierce: { title: "穿透", desc: "穿透 +1：子弹被第 n+1 个敌人阻挡（穿透与阻挡均造成伤害）" },
+  multishot: { title: "弹道", desc: "弹道 +1" },
+  bulletcount: { title: "子弹", desc: "子弹 +1" },
+  damage: { title: "强装药", desc: "伤害 ×1.3" },
+  pierce: { title: "穿透", desc: "穿透 +1" },
   atkspd: { title: "急速", desc: "攻速 ×1.5" },
 };
 
@@ -137,9 +143,15 @@ export function createSurvivor(canvas, hooks) {
   let bullets = [];
   /** @type {{ x: number; y: number; kind: 'square' | 'boss'; hp: number; maxHp: number; r: number; speed: number; contactDmg: number; rot: number }[]} */
   let enemies = [];
+  let xpOrbs = [];
+  let xp = 0;
+  let xpToLevel = XP_TO_LEVEL_BASE;
+  let level = 0;
+  let pendingLevelUps = 0;
+  let waveClear = false;
+  let waveCountdown = 0;
 
   const keys = { up: false, down: false, left: false, right: false };
-  let countdownMs = 0;
 
   let waveSpawnTarget = 0;
   let waveSpawnedCount = 0;
@@ -154,7 +166,7 @@ export function createSurvivor(canvas, hooks) {
     raf = 0;
   }
 
-  function syncHud(sub = "") {
+  function syncHud() {
     const remaining = (wave === BOSS_WAVE && bossSpawned)
       ? enemies.length
       : Math.max(0, waveSpawnTarget - waveSpawnedCount) + enemies.length;
@@ -162,7 +174,7 @@ export function createSurvivor(canvas, hooks) {
       hp: Math.max(0, Math.ceil(hp)),
       maxHp: PLAYER_MAX_HP,
       wave,
-      sub,
+      sub: level > 0 ? `Lv.${level}` : "",
       remaining,
     });
   }
@@ -185,12 +197,18 @@ export function createSurvivor(canvas, hooks) {
     atkSpdMult = 1;
     bullets = [];
     enemies = [];
-    countdownMs = 0;
+    xpOrbs = [];
+    xp = 0;
+    xpToLevel = XP_TO_LEVEL_BASE;
+    level = 0;
+    pendingLevelUps = 0;
+    waveClear = false;
+    waveCountdown = 0;
     waveSpawnTarget = 0;
     waveSpawnedCount = 0;
     spawnAccMs = 0;
     bossSpawned = false;
-    syncHud("");
+    syncHud();
   }
 
   function randomEdgePoint() {
@@ -309,38 +327,34 @@ export function createSurvivor(canvas, hooks) {
     }
   }
 
-  function beginCardPhase() {
-    phase = "cards";
-    halt();
-    syncHud("选择强化卡牌");
-    const options = pickThreeCards();
-    hooks.onOfferCards({ wave, options });
+  function checkLevelUp() {
+    while (xp >= xpToLevel) {
+      xp -= xpToLevel;
+      level++;
+      xpToLevel = XP_TO_LEVEL_BASE + level * 10;
+      pendingLevelUps++;
+    }
   }
 
-  function afterCardPicked() {
-    hooks.onHideCards();
-    phase = "countdown";
-    countdownMs = COUNTDOWN_MS;
-    syncHud(`下一波 ${Math.ceil(COUNTDOWN_MS / 1000)} 秒后开始…`);
-    running = true;
-    lastT = performance.now();
-    raf = requestAnimationFrame(tick);
+  function showNextLevelCard() {
+    pendingLevelUps--;
+    phase = "cards";
+    syncHud();
+    const options = pickThreeCards();
+    hooks.onOfferCards({ level, options });
   }
 
   function pickCard(cardId) {
     if (phase !== "cards") return;
     applyCard(cardId);
-    wave += 1;
-    afterCardPicked();
-  }
-
-  function resolveWaveClear() {
-    if (wave === BOSS_WAVE) {
-      halt();
-      hooks.onVictory();
-      return;
+    hooks.onHideCards();
+    if (pendingLevelUps > 0) {
+      showNextLevelCard();
+    } else {
+      phase = "combat";
+      lastT = performance.now();
+      raf = requestAnimationFrame(tick);
     }
-    beginCardPhase();
   }
 
   function waveFullyComplete() {
@@ -356,44 +370,14 @@ export function createSurvivor(canvas, hooks) {
     const dt = Math.min(50, now - lastT);
     lastT = now;
 
-    if (phase === "countdown") {
-      let mx = 0;
-      let my = 0;
-      if (keys.left) mx -= 1;
-      if (keys.right) mx += 1;
-      if (keys.up) my -= 1;
-      if (keys.down) my += 1;
-      const step = dt / 16;
-      if (mx !== 0 || my !== 0) {
-        const len = Math.hypot(mx, my);
-        px += (mx / len) * PLAYER_SPEED * step;
-        py += (my / len) * PLAYER_SPEED * step;
-        const moveAngle = Math.atan2(my, mx);
-        headAngle = lerpAngle(headAngle, moveAngle, 1 - Math.pow(1 - HEAD_LERP_SPEED, step));
-      }
-      px = Math.max(margin, Math.min(W - margin, px));
-      py = Math.max(margin, Math.min(H - margin, py));
-      gunAngle = lerpAngle(gunAngle, headAngle, 1 - Math.pow(1 - GUN_LERP_SPEED, step));
-
-      countdownMs -= dt;
-      const sec = Math.ceil(countdownMs / 1000);
-      syncHud(sec > 0 ? `下一波 ${sec}…` : "");
-      if (countdownMs <= 0) {
-        phase = "combat";
-        startWaveSpawning();
-        syncHud("");
-      }
+    if (phase === "cards") {
       draw();
       raf = requestAnimationFrame(tick);
       return;
     }
 
-    if (phase !== "combat") {
-      raf = requestAnimationFrame(tick);
-      return;
-    }
-
     invulnMs = Math.max(0, invulnMs - dt);
+    const step = dt / 16;
 
     let mx = 0;
     let my = 0;
@@ -401,7 +385,6 @@ export function createSurvivor(canvas, hooks) {
     if (keys.right) mx += 1;
     if (keys.up) my -= 1;
     if (keys.down) my += 1;
-    const step = dt / 16;
     if (mx !== 0 || my !== 0) {
       const len = Math.hypot(mx, my);
       px += (mx / len) * PLAYER_SPEED * step;
@@ -416,36 +399,46 @@ export function createSurvivor(canvas, hooks) {
     const gunTarget = nearest ? Math.atan2(nearest.y - py, nearest.x - px) : headAngle;
     gunAngle = lerpAngle(gunAngle, gunTarget, 1 - Math.pow(1 - GUN_LERP_SPEED, step));
 
-    if (wave === BOSS_WAVE) {
-      spawnAccMs += dt;
-      if (!bossSpawned) {
-        if (spawnAccMs >= BOSS_SPAWN_DELAY_MS) {
-          spawnBossAtEdge();
-          bossSpawned = true;
-          spawnAccMs = 0;
+    if (waveClear) {
+      waveCountdown -= dt;
+      if (waveCountdown <= 0) {
+        waveClear = false;
+        wave++;
+        startWaveSpawning();
+      }
+    }
+
+    if (!waveClear) {
+      if (wave === BOSS_WAVE) {
+        spawnAccMs += dt;
+        if (!bossSpawned) {
+          if (spawnAccMs >= BOSS_SPAWN_DELAY_MS) {
+            spawnBossAtEdge();
+            bossSpawned = true;
+            spawnAccMs = 0;
+          }
+        } else if (enemies.some(e => e.kind === "boss")) {
+          const interval = spawnIntervalForWave(wave);
+          let guard = 40;
+          while (guard-- > 0) {
+            const threshold = waveSpawnedCount === 0 ? FIRST_SPAWN_DELAY_MS : interval;
+            if (spawnAccMs < threshold) break;
+            spawnAccMs -= threshold;
+            spawnSquareAtEdge();
+            waveSpawnedCount++;
+          }
         }
-      } else if (enemies.some(e => e.kind === "boss")) {
+      } else {
         const interval = spawnIntervalForWave(wave);
+        spawnAccMs += dt;
         let guard = 40;
-        while (guard-- > 0) {
+        while (guard-- > 0 && waveSpawnedCount < waveSpawnTarget) {
           const threshold = waveSpawnedCount === 0 ? FIRST_SPAWN_DELAY_MS : interval;
           if (spawnAccMs < threshold) break;
           spawnAccMs -= threshold;
           spawnSquareAtEdge();
           waveSpawnedCount++;
         }
-      }
-    } else {
-      const interval = spawnIntervalForWave(wave);
-      spawnAccMs += dt;
-      let guard = 40;
-      while (guard-- > 0 && waveSpawnedCount < waveSpawnTarget) {
-        const threshold =
-          waveSpawnedCount === 0 ? FIRST_SPAWN_DELAY_MS : interval;
-        if (spawnAccMs < threshold) break;
-        spawnAccMs -= threshold;
-        spawnSquareAtEdge();
-        waveSpawnedCount++;
       }
     }
 
@@ -483,9 +476,41 @@ export function createSurvivor(canvas, hooks) {
         const e = enemies[hi];
         e.hp -= b.dmg;
         b.pierceLeft -= 1;
-        if (e.hp <= 0) enemies.splice(hi, 1);
+        if (e.hp <= 0) {
+          if (e.kind !== "boss") {
+            xpOrbs.push({ x: e.x, y: e.y, value: XP_PER_ORB, collecting: false, collected: false });
+          }
+          enemies.splice(hi, 1);
+        }
       }
       if (b.pierceLeft < 0) bullets.splice(bi, 1);
+    }
+
+    for (const orb of xpOrbs) {
+      if (orb.collected) continue;
+      if (!orb.collecting && Math.hypot(orb.x - px, orb.y - py) < PICKUP_RADIUS) {
+        orb.collecting = true;
+      }
+      if (orb.collecting) {
+        const dx = px - orb.x;
+        const dy = py - orb.y;
+        const d = Math.hypot(dx, dy);
+        if (d < 6) {
+          orb.collected = true;
+          xp += orb.value;
+        } else {
+          orb.x += (dx / d) * ORB_FLY_SPEED * step;
+          orb.y += (dy / d) * ORB_FLY_SPEED * step;
+        }
+      }
+    }
+    xpOrbs = xpOrbs.filter(o => !o.collected);
+
+    checkLevelUp();
+    if (pendingLevelUps > 0 && phase === "combat") {
+      showNextLevelCard();
+      draw();
+      return;
     }
 
     if (invulnMs <= 0) {
@@ -505,13 +530,19 @@ export function createSurvivor(canvas, hooks) {
       return;
     }
 
-    if (waveFullyComplete()) {
-      resolveWaveClear();
-      draw();
-      return;
+    if (!waveClear && waveFullyComplete()) {
+      if (wave === BOSS_WAVE) {
+        halt();
+        hooks.onVictory();
+        draw();
+        return;
+      }
+      waveClear = true;
+      waveCountdown = COUNTDOWN_MS;
+      for (const orb of xpOrbs) orb.collecting = true;
     }
 
-    syncHud("");
+    syncHud();
     draw();
     raf = requestAnimationFrame(tick);
   }
@@ -573,6 +604,17 @@ export function createSurvivor(canvas, hooks) {
       }
     }
 
+    for (const orb of xpOrbs) {
+      if (orb.collected) continue;
+      ctx.beginPath();
+      ctx.arc(orb.x, orb.y, ORB_VISUAL_R, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
+      ctx.fill();
+      ctx.strokeStyle = "#4ade80";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
     for (const b of bullets) {
       ctx.beginPath();
       ctx.arc(b.x, b.y, BULLET_R, 0, Math.PI * 2);
@@ -619,16 +661,24 @@ export function createSurvivor(canvas, hooks) {
     ctx.lineWidth = 0.5;
     ctx.strokeRect(pBarX, pBarY, pBarW, pBarH);
 
-    if (phase === "countdown") {
-      const sec = Math.max(0, Math.ceil(countdownMs / 1000));
-      ctx.font = "bold 64px 'JetBrains Mono', ui-monospace, monospace";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.strokeStyle = "rgba(0,0,0,0.6)";
-      ctx.lineWidth = 4;
-      ctx.strokeText(String(Math.max(1, sec)), W / 2, H / 2);
-      ctx.fillStyle = "rgba(232, 236, 244, 0.85)";
-      ctx.fillText(String(Math.max(1, sec)), W / 2, H / 2);
+    const xpBarH = 8;
+    const xpBarY = H - xpBarH;
+    const xpRatio = Math.min(1, xp / xpToLevel);
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fillRect(0, xpBarY, W, xpBarH);
+    ctx.fillStyle = "#eab308";
+    ctx.fillRect(0, xpBarY, W * xpRatio, xpBarH);
+
+    if (waveClear && waveCountdown > 0) {
+      const sec = Math.max(1, Math.ceil(waveCountdown / 1000));
+      ctx.font = "bold 18px 'JetBrains Mono', ui-monospace, monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.strokeStyle = "rgba(0,0,0,0.5)";
+      ctx.lineWidth = 3;
+      ctx.strokeText(`距离下一波还有：${sec}S`, 14, 14);
+      ctx.fillStyle = "rgba(232, 236, 244, 0.9)";
+      ctx.fillText(`距离下一波还有：${sec}S`, 14, 14);
     }
   }
 
@@ -638,7 +688,7 @@ export function createSurvivor(canvas, hooks) {
       startWaveSpawning();
       running = true;
       lastT = performance.now();
-      syncHud("");
+      syncHud();
       raf = requestAnimationFrame(tick);
     },
     stop() {
