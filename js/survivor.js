@@ -14,13 +14,20 @@ const BULLET_R = 2.4;
 const BASE_BULLET_DMG = 11;
 const INVULN_MS = 900;
 const COUNTDOWN_MS = 5000;
-const BOSS_WAVE = 2;
+const BOSS_WAVE = 12;
 
-const XP_PER_ORB = 10;
-const XP_TO_LEVEL_BASE = 50;
+const LEVEL_MAX = 15;
+const XP_DROP_CHANCE = 0.7;
+const XP_PER_ORB = 14;
 const PICKUP_RADIUS = 35;
 const ORB_FLY_SPEED = 14;
 const ORB_VISUAL_R = 3.5;
+const BULLET_STAGGER_MS = 32;
+
+function xpToNext(level) {
+  if (level >= LEVEL_MAX) return 1;
+  return Math.round(34 * Math.pow(1.24, level));
+}
 
 /** 普通怪碰撞半径（方形视觉略大于 r） */
 const ENEMY_HIT_R = 6;
@@ -122,7 +129,7 @@ export function createSurvivor(canvas, hooks) {
   let raf = 0;
   let lastT = 0;
 
-  /** @type {'combat' | 'cards' | 'countdown'} */
+  /** @type {'combat' | 'cards'} */
   let phase = "combat";
   let wave = 1;
   let hp = PLAYER_MAX_HP;
@@ -145,8 +152,9 @@ export function createSurvivor(canvas, hooks) {
   let enemies = [];
   let xpOrbs = [];
   let xp = 0;
-  let xpToLevel = XP_TO_LEVEL_BASE;
   let level = 0;
+  /** @type {{ spawnAt: number; ang: number; dmg: number }[]} */
+  let pendingShots = [];
   let pendingLevelUps = 0;
   let waveClear = false;
   let waveCountdown = 0;
@@ -174,7 +182,7 @@ export function createSurvivor(canvas, hooks) {
       hp: Math.max(0, Math.ceil(hp)),
       maxHp: PLAYER_MAX_HP,
       wave,
-      sub: level > 0 ? `Lv.${level}` : "",
+      sub: level > 0 ? `Lv.${level}/${LEVEL_MAX}` : "",
       remaining,
     });
   }
@@ -199,8 +207,8 @@ export function createSurvivor(canvas, hooks) {
     enemies = [];
     xpOrbs = [];
     xp = 0;
-    xpToLevel = XP_TO_LEVEL_BASE;
     level = 0;
+    pendingShots = [];
     pendingLevelUps = 0;
     waveClear = false;
     waveCountdown = 0;
@@ -263,6 +271,7 @@ export function createSurvivor(canvas, hooks) {
   function startWaveSpawning() {
     enemies = [];
     bullets = [];
+    pendingShots = [];
     waveSpawnedCount = 0;
     spawnAccMs = 0;
     if (wave === BOSS_WAVE) {
@@ -286,22 +295,40 @@ export function createSurvivor(canvas, hooks) {
     return best;
   }
 
-  function fireVolley() {
+  function spawnBullet(ang, dmg) {
     const muzzle = TRI_VISUAL_R * 0.35 + 10;
+    bullets.push({
+      x: px + Math.cos(ang) * muzzle,
+      y: py + Math.sin(ang) * muzzle,
+      vx: Math.cos(ang) * BULLET_SPEED,
+      vy: Math.sin(ang) * BULLET_SPEED,
+      dmg,
+      pierceLeft: pierceExtra,
+    });
+  }
+
+  function scheduleVolleyFrom(t0) {
+    const dmg = BASE_BULLET_DMG * damageMult;
+    let delay = 0;
+    let lastT = t0;
     for (let s = 0; s < shotsPerVolley; s++) {
       const shotOff = (s - (shotsPerVolley - 1) / 2) * 0.09;
       const ang = gunAngle + shotOff;
-      const dmg = BASE_BULLET_DMG * damageMult;
       for (let b = 0; b < bulletCount; b++) {
-        bullets.push({
-          x: px + Math.cos(ang) * muzzle,
-          y: py + Math.sin(ang) * muzzle,
-          vx: Math.cos(ang) * BULLET_SPEED,
-          vy: Math.sin(ang) * BULLET_SPEED,
-          dmg,
-          pierceLeft: pierceExtra,
-        });
+        const spawnAt = t0 + delay;
+        pendingShots.push({ spawnAt, ang, dmg });
+        lastT = spawnAt;
+        delay += BULLET_STAGGER_MS;
       }
+    }
+    return lastT + BULLET_STAGGER_MS;
+  }
+
+  function flushPendingShots(now) {
+    pendingShots.sort((a, b) => a.spawnAt - b.spawnAt);
+    while (pendingShots.length && pendingShots[0].spawnAt <= now) {
+      const sh = pendingShots.shift();
+      spawnBullet(sh.ang, sh.dmg);
     }
   }
 
@@ -328,12 +355,14 @@ export function createSurvivor(canvas, hooks) {
   }
 
   function checkLevelUp() {
-    while (xp >= xpToLevel) {
-      xp -= xpToLevel;
+    while (level < LEVEL_MAX) {
+      const need = xpToNext(level);
+      if (xp < need) break;
+      xp -= need;
       level++;
-      xpToLevel = XP_TO_LEVEL_BASE + level * 10;
       pendingLevelUps++;
     }
+    if (level >= LEVEL_MAX) xp = 0;
   }
 
   function showNextLevelCard() {
@@ -442,11 +471,19 @@ export function createSurvivor(canvas, hooks) {
       }
     }
 
+    flushPendingShots(now);
+
     fireAcc += dt;
     const fireInterval = BASE_FIRE_MS / atkSpdMult;
+    let nextVolleyT = now;
+    if (pendingShots.length) {
+      let maxT = 0;
+      for (const p of pendingShots) maxT = Math.max(maxT, p.spawnAt);
+      nextVolleyT = maxT + BULLET_STAGGER_MS;
+    }
     while (fireAcc >= fireInterval) {
       fireAcc -= fireInterval;
-      fireVolley();
+      nextVolleyT = scheduleVolleyFrom(nextVolleyT);
     }
 
     for (const b of bullets) {
@@ -477,7 +514,7 @@ export function createSurvivor(canvas, hooks) {
         e.hp -= b.dmg;
         b.pierceLeft -= 1;
         if (e.hp <= 0) {
-          if (e.kind !== "boss") {
+          if (e.kind !== "boss" && level < LEVEL_MAX && Math.random() < XP_DROP_CHANCE) {
             xpOrbs.push({ x: e.x, y: e.y, value: XP_PER_ORB, collecting: false, collected: false });
           }
           enemies.splice(hi, 1);
@@ -495,12 +532,16 @@ export function createSurvivor(canvas, hooks) {
         const dx = px - orb.x;
         const dy = py - orb.y;
         const d = Math.hypot(dx, dy);
-        if (d < 6) {
+        if (d < 6 || d < 1e-6) {
           orb.collected = true;
-          xp += orb.value;
+          if (level < LEVEL_MAX) xp += orb.value;
         } else {
-          orb.x += (dx / d) * ORB_FLY_SPEED * step;
-          orb.y += (dy / d) * ORB_FLY_SPEED * step;
+          const move = Math.min(d, ORB_FLY_SPEED * step);
+          orb.x += (dx / d) * move;
+          orb.y += (dy / d) * move;
+          const pad = 6;
+          orb.x = Math.max(pad, Math.min(W - pad, orb.x));
+          orb.y = Math.max(pad, Math.min(H - pad, orb.y));
         }
       }
     }
@@ -663,7 +704,8 @@ export function createSurvivor(canvas, hooks) {
 
     const xpBarH = 8;
     const xpBarY = H - xpBarH;
-    const xpRatio = Math.min(1, xp / xpToLevel);
+    const needXp = level < LEVEL_MAX ? xpToNext(level) : 1;
+    const xpRatio = level >= LEVEL_MAX ? 1 : Math.min(1, xp / needXp);
     ctx.fillStyle = "rgba(0,0,0,0.45)";
     ctx.fillRect(0, xpBarY, W, xpBarH);
     ctx.fillStyle = "#eab308";

@@ -257,9 +257,13 @@ const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
     hideSurvivorCardModal();
   },
   onGameOver: (w) => {
+    survivorStartBtn.textContent = "再来一次";
+    survivorStartBtn.classList.remove("hidden");
     showOverlay("阵亡", `坚持到第 ${w} 波。`);
   },
   onVictory: () => {
+    survivorStartBtn.textContent = "再来一次";
+    survivorStartBtn.classList.remove("hidden");
     showOverlay("胜利", "五边形 Boss 已被击毁！通关！");
   },
 });
@@ -477,6 +481,7 @@ document.querySelectorAll(".game-card").forEach((card) => {
       hideSurvivorCardModal();
       showView("survivor");
       survivorApi.reset();
+      survivorStartBtn.textContent = "开始游戏";
       survivorStartBtn.classList.remove("hidden");
     }
   });
