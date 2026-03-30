@@ -3,7 +3,7 @@
  */
 
 const PLAYER_MAX_HP = 120;
-const PLAYER_SPEED = 4.15;
+const PLAYER_SPEED = 4.15 * 0.94;
 /** 碰撞半径（小于视觉三角） */
 const PLAYER_HIT_R = 6.5;
 /** 三角外形半径 */
@@ -24,6 +24,7 @@ const ORB_FLY_SPEED = 14;
 const ORB_VISUAL_R = 3.5;
 const BULLET_STAGGER_MS = 32;
 const ENEMY_HIT_FLASH_MS = 140;
+const CRIT_MULT = 1.33;
 
 function xpToNext(level) {
   if (level >= LEVEL_MAX) return 1;
@@ -45,36 +46,29 @@ function spawnIntervalForWave(w) {
 }
 
 /**
- * 升级卡牌（展示用 CARD_DEFS）与数值（见下方 applyCard / 全局常量）对照：
- * | id          | 变量           | 每次选择效果              |
- * |-------------|----------------|---------------------------|
- * | multishot   | shotsPerVolley | +1 条弹道（扇面方向数）   |
- * | bulletcount | bulletCount    | +1 每条弹道的子弹发数     |
- * | damage      | damageMult     | ×1.15 子弹伤害（界面不显示数值） |
- * | pierce      | pierceExtra    | +1 穿透（第 n+1 敌阻挡）  |
- * | atkspd      | atkSpdMult     | ×1.08 攻速（界面不显示数值）     |
- * 基础子弹伤害 BASE_BULLET_DMG、开火间隔 BASE_FIRE_MS、子弹速度 BULLET_SPEED 见文件顶部。
+ * 升级卡牌（CARD_DEFS 展示 / applyCard 数值）：
+ * multishot +1 扇面；bulletcount +1 每道子弹发数；damage ×1.15；pierce +1；
+ * atkspd ×1.08；heavyfire ×1.15 伤害且移速×0.97；weakpoint 暴击率 5%、暴伤×1.33（仅可出现一次于选项中）。
  */
 const CARD_DEFS = {
-  multishot: { title: "弹道", desc: "弹道 +1" },
-  bulletcount: { title: "子弹", desc: "子弹 +1" },
-  damage: { title: "强装药", desc: "增加攻击力" },
-  pierce: { title: "穿透", desc: "穿透 +1" },
-  atkspd: { title: "急速", desc: "增加攻速" },
+  multishot: { title: "区域火力", desc: "区域火力 +1" },
+  bulletcount: { title: "火力翻倍", desc: "火力翻倍 +1" },
+  damage: { title: "精良火药", desc: "增加攻击力" },
+  pierce: { title: "贯穿", desc: "贯穿 +1" },
+  atkspd: { title: "快枪手", desc: "增加攻速" },
+  heavyfire: {
+    title: "重火力",
+    desc: "增加更多的攻击力，略微降低移速。",
+    note: "真是一把不错的枪，但是对我来说太重了些",
+  },
+  weakpoint: {
+    title: "弱点打击",
+    desc: "你现在可以暴击了，拥有5%的暴击概率",
+  },
 };
 
 function normalEnemyContactDamage(wave) {
   return Math.min(5 + (wave - 1) * 2, 25);
-}
-
-function pickThreeCards() {
-  const ids = Object.keys(CARD_DEFS);
-  const shuffled = [...ids].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 3).map((id) => ({
-    id,
-    title: CARD_DEFS[id].title,
-    desc: CARD_DEFS[id].desc,
-  }));
 }
 
 function drawPolygon(ctx, x, y, r, sides, rotation, fill, stroke) {
@@ -157,6 +151,9 @@ export function createSurvivor(canvas, hooks) {
   let damageMult = 1;
   let pierceExtra = 0;
   let atkSpdMult = 1;
+  let moveSpeedMult = 1;
+  let critChance = 0;
+  let weakpointEverInOffer = false;
 
   /** @type {{ x: number; y: number; vx: number; vy: number; dmg: number; pierceLeft: number }[]} */
   let bullets = [];
@@ -215,6 +212,9 @@ export function createSurvivor(canvas, hooks) {
     damageMult = 1;
     pierceExtra = 0;
     atkSpdMult = 1;
+    moveSpeedMult = 1;
+    critChance = 0;
+    weakpointEverInOffer = false;
     bullets = [];
     enemies = [];
     xpOrbs = [];
@@ -284,7 +284,6 @@ export function createSurvivor(canvas, hooks) {
   /** 新一波：清空场上怪，从边缘按间隔陆续刷出（首只也有延迟） */
   function startWaveSpawning() {
     enemies = [];
-    bullets = [];
     pendingShots = [];
     waveSpawnedCount = 0;
     spawnAccMs = 0;
@@ -363,6 +362,13 @@ export function createSurvivor(canvas, hooks) {
       case "atkspd":
         atkSpdMult *= 1.08;
         break;
+      case "heavyfire":
+        damageMult *= 1.15;
+        moveSpeedMult *= 0.97;
+        break;
+      case "weakpoint":
+        critChance = 0.05;
+        break;
       default:
         break;
     }
@@ -379,11 +385,29 @@ export function createSurvivor(canvas, hooks) {
     if (level >= LEVEL_MAX) xp = 0;
   }
 
+  function pickThreeCardsInternal() {
+    const pool = Object.keys(CARD_DEFS).filter(
+      (id) => id !== "weakpoint" || !weakpointEverInOffer,
+    );
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const picked = shuffled.slice(0, 3);
+    if (picked.includes("weakpoint")) weakpointEverInOffer = true;
+    return picked.map((id) => {
+      const def = CARD_DEFS[id];
+      return {
+        id,
+        title: def.title,
+        desc: def.desc,
+        note: def.note ?? "",
+      };
+    });
+  }
+
   function showNextLevelCard() {
     pendingLevelUps--;
     phase = "cards";
     syncHud();
-    const options = pickThreeCards();
+    const options = pickThreeCardsInternal();
     hooks.onOfferCards({ level, options });
   }
 
@@ -430,8 +454,9 @@ export function createSurvivor(canvas, hooks) {
     if (keys.down) my += 1;
     if (mx !== 0 || my !== 0) {
       const len = Math.hypot(mx, my);
-      px += (mx / len) * PLAYER_SPEED * step;
-      py += (my / len) * PLAYER_SPEED * step;
+      const spd = PLAYER_SPEED * moveSpeedMult;
+      px += (mx / len) * spd * step;
+      py += (my / len) * spd * step;
       const moveAngle = Math.atan2(my, mx);
       headAngle = lerpAngle(headAngle, moveAngle, 1 - Math.pow(1 - HEAD_LERP_SPEED, step));
     }
@@ -526,7 +551,9 @@ export function createSurvivor(canvas, hooks) {
         );
         if (hi === -1) break;
         const e = enemies[hi];
-        e.hp -= b.dmg;
+        let hitDmg = b.dmg;
+        if (critChance > 0 && Math.random() < critChance) hitDmg *= CRIT_MULT;
+        e.hp -= hitDmg;
         e.hitFlashMs = ENEMY_HIT_FLASH_MS;
         b.pierceLeft -= 1;
         if (e.hp <= 0) {

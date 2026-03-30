@@ -244,7 +244,20 @@ const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "survivor-card-btn";
-      btn.innerHTML = `<span class="survivor-card-btn__title">${opt.title}</span><span class="survivor-card-btn__desc">${opt.desc}</span>`;
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "survivor-card-btn__title";
+      titleSpan.textContent = opt.title;
+      btn.appendChild(titleSpan);
+      const descSpan = document.createElement("span");
+      descSpan.className = "survivor-card-btn__desc";
+      descSpan.textContent = opt.desc;
+      btn.appendChild(descSpan);
+      if (opt.note) {
+        const noteSpan = document.createElement("span");
+        noteSpan.className = "survivor-card-btn__note";
+        noteSpan.textContent = opt.note;
+        btn.appendChild(noteSpan);
+      }
       btn.addEventListener("click", () => {
         survivorApi.pickCard(opt.id);
         hideSurvivorCardModal();

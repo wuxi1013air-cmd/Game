@@ -1019,6 +1019,15 @@ main {
   line-height: 1.4;
 }
 
+.survivor-card-btn__note {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--muted);
+  opacity: 0.85;
+  line-height: 1.35;
+  font-weight: 400;
+}
+
 .solitaire {
   --sol-w: 3.65rem;
   --sol-h: 5.15rem;
