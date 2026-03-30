@@ -50,17 +50,17 @@ function spawnIntervalForWave(w) {
  * |-------------|----------------|---------------------------|
  * | multishot   | shotsPerVolley | +1 条弹道（扇面方向数）   |
  * | bulletcount | bulletCount    | +1 每条弹道的子弹发数     |
- * | damage      | damageMult     | ×1.3 子弹伤害倍率         |
+ * | damage      | damageMult     | ×1.15 子弹伤害（界面不显示数值） |
  * | pierce      | pierceExtra    | +1 穿透（第 n+1 敌阻挡）  |
- * | atkspd      | atkSpdMult     | ×1.5 攻速（缩短开火间隔） |
+ * | atkspd      | atkSpdMult     | ×1.08 攻速（界面不显示数值）     |
  * 基础子弹伤害 BASE_BULLET_DMG、开火间隔 BASE_FIRE_MS、子弹速度 BULLET_SPEED 见文件顶部。
  */
 const CARD_DEFS = {
   multishot: { title: "弹道", desc: "弹道 +1" },
   bulletcount: { title: "子弹", desc: "子弹 +1" },
-  damage: { title: "强装药", desc: "伤害 ×1.3" },
+  damage: { title: "强装药", desc: "增加攻击力" },
   pierce: { title: "穿透", desc: "穿透 +1" },
-  atkspd: { title: "急速", desc: "攻速 ×1.5" },
+  atkspd: { title: "急速", desc: "增加攻速" },
 };
 
 function normalEnemyContactDamage(wave) {
@@ -355,13 +355,13 @@ export function createSurvivor(canvas, hooks) {
         bulletCount += 1;
         break;
       case "damage":
-        damageMult *= 1.3;
+        damageMult *= 1.15;
         break;
       case "pierce":
         pierceExtra += 1;
         break;
       case "atkspd":
-        atkSpdMult *= 1.5;
+        atkSpdMult *= 1.08;
         break;
       default:
         break;
