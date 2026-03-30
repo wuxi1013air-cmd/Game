@@ -43,6 +43,8 @@ const SPEEDSTER_VISUAL_R = 10.5;
 const SPEEDSTER_DETECT_GRIDS = 6;
 const SPEEDSTER_CHARGE_MS = 1000;
 const SPEEDSTER_DASH_GRIDS = 8;
+/** 极速三角冲刺撞人伤害上限 */
+const SPEEDSTER_DASH_DMG_CAP = 30;
 /** 蓄力/冲刺锁定：玩家拉开超过此格数则打断蓄力回到追击 */
 const SPEEDSTER_LOCK_BREAK_GRIDS = 6;
 const SPEEDSTER_TRAIL_DOT_MS = 110;
@@ -491,7 +493,7 @@ export function createSurvivor(canvas, hooks) {
       speed: spd,
       baseSpeed: spd,
       contactDmg: Math.round(dmg * 0.5),
-      dashDmg: Math.round(dmg * 2),
+      dashDmg: Math.min(SPEEDSTER_DASH_DMG_CAP, Math.round(dmg * 2)),
       rot: Math.random() * Math.PI,
       hitFlashMs: 0,
       hitRangeMult: SQUARE_HIT_RANGE_MULT,
