@@ -224,12 +224,14 @@ function showSurvivorCardModal() {
 
 const survivorHpEl = document.getElementById("survivor-hp");
 const survivorWaveEl = document.getElementById("survivor-wave");
+const survivorRemainingEl = document.getElementById("survivor-remaining");
 const survivorSubEl = document.getElementById("survivor-sub");
 
 const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
-  onHud: ({ hp, maxHp, wave, sub }) => {
+  onHud: ({ hp, maxHp, wave, sub, remaining }) => {
     survivorHpEl.textContent = `${hp} / ${maxHp}`;
     survivorWaveEl.textContent = String(wave);
+    survivorRemainingEl.textContent = String(remaining ?? 0);
     survivorSubEl.textContent = sub || "";
   },
   onOfferCards: ({ wave, options }) => {
@@ -256,7 +258,7 @@ const survivorApi = createSurvivor(document.getElementById("survivor-canvas"), {
     showOverlay("阵亡", `坚持到第 ${w} 波。`);
   },
   onVictory: () => {
-    showOverlay("胜利", "五边形 Boss 已被击毁！第 12 波通关。");
+    showOverlay("胜利", "五边形 Boss 已被击毁！通关！");
   },
 });
 

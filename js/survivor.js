@@ -14,7 +14,7 @@ const BULLET_R = 2.4;
 const BASE_BULLET_DMG = 11;
 const INVULN_MS = 900;
 const COUNTDOWN_MS = 5000;
-const BOSS_WAVE = 12;
+const BOSS_WAVE = 2;
 
 /** 普通怪碰撞半径（方形视觉略大于 r） */
 const ENEMY_HIT_R = 6;
@@ -33,8 +33,7 @@ function spawnIntervalForWave(w) {
 const CARD_DEFS = {
   multishot: { title: "弹幕", desc: "每次开火子弹数量 +1" },
   damage: { title: "强装药", desc: "子弹伤害 ×1.3" },
-  pierce: { title: "穿透", desc: "子弹穿透 +1" },
-  pistol: { title: "双持", desc: "增加一把手枪" },
+  pierce: { title: "穿透", desc: "穿透 +1：子弹被第 n+1 个敌人阻挡（穿透与阻挡均造成伤害）" },
   atkspd: { title: "急速", desc: "攻速 ×1.5" },
 };
 
@@ -143,11 +142,13 @@ export function createSurvivor(canvas, hooks) {
   }
 
   function syncHud(sub = "") {
+    const remaining = Math.max(0, waveSpawnTarget - waveSpawnedCount) + enemies.length;
     hooks.onHud({
       hp: Math.max(0, Math.ceil(hp)),
       maxHp: PLAYER_MAX_HP,
       wave,
       sub,
+      remaining,
     });
   }
 
@@ -214,8 +215,8 @@ export function createSurvivor(canvas, hooks) {
       x: p.x,
       y: p.y,
       kind: "boss",
-      hp: 480,
-      maxHp: 480,
+      hp: 10000,
+      maxHp: 10000,
       r: BOSS_HIT_R,
       speed: 0.78,
       contactDmg: 50,
@@ -282,9 +283,6 @@ export function createSurvivor(canvas, hooks) {
       case "pierce":
         pierceExtra += 1;
         break;
-      case "pistol":
-        pistolCount += 1;
-        break;
       case "atkspd":
         atkSpdMult *= 1.5;
         break;
@@ -338,6 +336,21 @@ export function createSurvivor(canvas, hooks) {
     lastT = now;
 
     if (phase === "countdown") {
+      let mx = 0;
+      let my = 0;
+      if (keys.left) mx -= 1;
+      if (keys.right) mx += 1;
+      if (keys.up) my -= 1;
+      if (keys.down) my += 1;
+      const step = dt / 16;
+      if (mx !== 0 || my !== 0) {
+        const len = Math.hypot(mx, my);
+        px += (mx / len) * PLAYER_SPEED * step;
+        py += (my / len) * PLAYER_SPEED * step;
+      }
+      px = Math.max(margin, Math.min(W - margin, px));
+      py = Math.max(margin, Math.min(H - margin, py));
+
       countdownMs -= dt;
       const sec = Math.ceil(countdownMs / 1000);
       syncHud(sec > 0 ? `下一波 ${sec}…` : "");

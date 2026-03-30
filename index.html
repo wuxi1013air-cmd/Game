@@ -54,7 +54,7 @@
         <button type="button" class="game-card" data-game="survivor">
           <span class="card-emoji">🔺</span>
           <span class="card-name">三角幸存者</span>
-          <span class="card-desc">类吸血鬼幸存者：WASD 移动，清波选卡；第 12 波五边形 Boss</span>
+          <span class="card-desc">类吸血鬼幸存者：WASD 移动，清波选卡；第 2 波五边形 Boss</span>
         </button>
       </div>
     </section>
@@ -150,11 +150,12 @@
         <div class="stats survivor-toolbar-stats">
           <span>生命 <strong id="survivor-hp">120</strong> / 120</span>
           <span>波次 <strong id="survivor-wave">1</strong></span>
+          <span>剩余 <strong id="survivor-remaining">0</strong></span>
           <span id="survivor-sub" class="survivor-sub"></span>
         </div>
         <button type="button" class="btn" id="survivor-restart">重新开始</button>
       </div>
-      <p class="survivor-hint">WASD 或方向键移动；三角中心的手枪会转向最近敌人并自动射击。开局与每波开始后场上先空一段时间，敌人再从地图边缘陆续出现。普通为小型方形（接触伤害随波次升高，上限 25）；第 12 波为五边形 Boss（伤害 50）。每波清完后三选一强化，选完后 5 秒进入下一波。</p>
+      <p class="survivor-hint">WASD 或方向键移动；三角中心的手枪会转向最近敌人并自动射击。开局与每波开始后场上先空一段时间，敌人再从地图边缘陆续出现。普通为小型方形（接触伤害随波次升高，上限 25）；第 2 波为五边形 Boss（伤害 50）。每波清完后三选一强化，选完后 5 秒进入下一波（倒计时期间可移动）。</p>
       <div class="survivor-wrap">
         <canvas id="survivor-canvas" width="1920" height="1080" aria-label="三角幸存者游戏区域" tabindex="0"></canvas>
       </div>
