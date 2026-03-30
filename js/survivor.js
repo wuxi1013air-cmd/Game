@@ -13,15 +13,44 @@ const BULLET_SPEED = 8.5;
 const BULLET_R = 2.4;
 const BASE_BULLET_DMG = 11;
 const INVULN_MS = 900;
-const COUNTDOWN_MS = 5000;
-const BOSS_WAVE = 12;
+const BOSS_WAVE = 14;
+/** 非 Boss 波：单波战斗时长上限，倒计时结束强制进下一波 */
+const WAVE_COMBAT_DURATION_MS = 40000;
+/** 提前清场后，剩余时间大于此值则缩短为该值（≤5s 时不再缩短） */
+const WAVE_EARLY_CLEAR_SNAP_MS = 5000;
+/** 左上角倒计时数字上限（与单波秒数一致） */
+const WAVE_COUNTDOWN_UI_CAP_SEC = Math.ceil(WAVE_COMBAT_DURATION_MS / 1000);
 
-const LEVEL_MAX = 15;
+const LEVEL_MAX = 18;
 const XP_DROP_CHANCE = 0.85;
 const XP_PER_ORB = 14;
-const TANK_FIRST_WAVE = 3;
+/** 坦克首现波次（第 3、4 波为仅普通+子母插入波，无坦克） */
+const TANK_FIRST_WAVE = 5;
 const BOSS_TANK_CAP = 3;
 const ENEMY_SEPARATION_GAP = 2.5;
+/** 与普通兵重叠时，位移分给敌人的比例（其余回弹玩家，形成“推开”手感） */
+const SQUARE_PUSH_ENEMY_SHARE = 0.84;
+/** 玩家与敌人碰撞分离相对「外切」距离的倍数；1.2 表示重叠再低约 20% */
+const PLAYER_ENEMY_SEP_MULT = 1.2;
+/** 与画布网格线一致，用于「格」距离 */
+const GRID = 64;
+/** 普通兵、极速三角接触判伤：相对几何半径放宽约 30% */
+const SQUARE_HIT_RANGE_MULT = 1.3;
+/** 冲刺、母体等：判伤与外切一致（0% 额外重叠） */
+const STRICT_HIT_RANGE_MULT = 1.0;
+const SPEEDSTER_R = 7.2;
+const SPEEDSTER_VISUAL_R = 10.5;
+const SPEEDSTER_DETECT_GRIDS = 6;
+const SPEEDSTER_CHARGE_MS = 1000;
+const SPEEDSTER_DASH_GRIDS = 8;
+/** 蓄力/冲刺锁定：玩家拉开超过此格数则打断蓄力回到追击 */
+const SPEEDSTER_LOCK_BREAK_GRIDS = 6;
+const SPEEDSTER_TRAIL_DOT_MS = 110;
+/** 解体前子母母体移速相对普通正方形的比例 */
+const CARRIER_PRE_SPLIT_SPEED_MULT = 0.88;
+/** 子母剥离子体：短时冲刺倍率与时长 */
+const CARRIER_CHILD_SPRINT_MULT = 1.5;
+const CARRIER_CHILD_SPRINT_MS = 1200;
 const PICKUP_RADIUS = 35;
 const ORB_FLY_SPEED = 14;
 const ORB_VISUAL_R = 3.5;
@@ -36,6 +65,9 @@ function xpToNext(level) {
 
 /** 普通怪碰撞半径（方形视觉略大于 r） */
 const ENEMY_HIT_R = 6;
+/** 子母：单块子体边长 = 普通正方形视觉边长；母体外包正方形边长 = 2×子体 */
+const CARRIER_CELL = ENEMY_HIT_R * 1.45;
+const CARRIER_R = CARRIER_CELL * Math.SQRT2 + 2;
 const BOSS_HIT_R = 30;
 const BOSS_VISUAL_R = 36;
 /** 六边形坦克：相对原 Boss 1/4 尺寸的体积翻倍（半径 ×2，平面面积约 ×4） */
@@ -47,15 +79,40 @@ const BOSS_SPAWN_DELAY_MS = 900;
 /** 每波首只怪出现前的延迟（进场时场上为空） */
 const FIRST_SPAWN_DELAY_MS = 1000;
 
-/** 同波内刷怪间隔：波次越高刷得越快（更压迫） */
+/** 同波内刷怪间隔：波次越高刷得越快；5～Boss 波整体略放慢；Boss 波再略降；第 7 波起再略拉长间隔（总数不变） */
 function spawnIntervalForWave(w) {
-  return Math.max(265, 740 - w * 42);
+  let iv = Math.max(265, 740 - w * 42);
+  if (w >= 5 && w <= BOSS_WAVE) iv = Math.round(iv * 1.1);
+  if (w === BOSS_WAVE) iv = Math.round(iv * 1.22);
+  if (w > 6 && w <= BOSS_WAVE) iv = Math.round(iv * 1.14);
+  return iv;
+}
+
+/** 第 3、4 波：仅普通兵 + 1 只子母（无三角、无坦克） */
+function isCarrierInsertWave(w) {
+  return w === 3 || w === 4;
+}
+
+function speedsterSpawnTargetForWave(w) {
+  if (w < 3 || w >= BOSS_WAVE) return 0;
+  if (isCarrierInsertWave(w)) return 0;
+  const wOld = w - 2;
+  if (wOld <= 4) return 2;
+  return Math.min(14, 2 + Math.floor((wOld - 4) * 1.5));
+}
+
+function carrierSpawnTargetForWave(w) {
+  if (w < 3 || w >= BOSS_WAVE) return 0;
+  if (isCarrierInsertWave(w)) return 1;
+  const wOld = w - 2;
+  if (wOld <= 4) return 1;
+  return Math.min(10, 1 + (wOld - 4));
 }
 
 /**
  * 升级卡牌（CARD_DEFS 展示 / applyCard 数值）：
- * multishot +1 弹道；bulletcount +1 子弹数量；damage ×1.15；pierce +1；atkspd ×1.08；
- * heavyfire ×1.15 攻、移速×0.97；swiftwalk 移速×1.06；fullheal 回满血；
+ * multishot +1 弹道（各弹道同时开火）；bulletcount +1 同弹道内子弹错峰；damage ×1.1；pierce +1；atkspd ×1.2；
+ * heavyfire ×1.25 攻、移速×0.97；swiftwalk 移速×1.08；fullheal 回满血；
  * weakpoint 暴击 5%、暴伤×1.33（选项中最多一次）。多弹道夹角见 VOLLEY_SPREAD_RAD。
  */
 const VOLLEY_SPREAD_RAD = 0.062;
@@ -73,7 +130,7 @@ const CARD_DEFS = {
   },
   swiftwalk: {
     title: "健步如飞",
-    desc: "增加6%移速",
+    desc: "增加8%移速",
     note: "好马配好鞍，好鞋配好人",
   },
   fullheal: {
@@ -90,6 +147,9 @@ const CARD_DEFS = {
 function normalEnemyContactDamage(wave) {
   return Math.min(5 + (wave - 1) * 2, 25);
 }
+
+/** 非 Boss 敌人移速全局略降（Boss 固定 1.5 不受影响） */
+const ENEMY_MOVE_MULT = 0.93;
 
 function drawPolygon(ctx, x, y, r, sides, rotation, fill, stroke) {
   ctx.beginPath();
@@ -114,6 +174,8 @@ function drawPolygon(ctx, x, y, r, sides, rotation, fill, stroke) {
 
 const GUN_LERP_SPEED = 0.18;
 const HEAD_LERP_SPEED = 0.22;
+/** 极速三角追击/待机时朝向玩家的旋转（大于 HEAD_LERP 更快指向） */
+const SPEEDSTER_CHASE_LERP_SPEED = 0.38;
 
 function lerpAngle(from, to, t) {
   let diff = to - from;
@@ -178,7 +240,7 @@ export function createSurvivor(canvas, hooks) {
 
   /** @type {{ x: number; y: number; vx: number; vy: number; dmg: number; pierceLeft: number }[]} */
   let bullets = [];
-  /** @type {{ x: number; y: number; kind: 'square' | 'boss' | 'tank'; hp: number; maxHp: number; r: number; speed: number; contactDmg: number; rot: number; hitFlashMs: number }[]} */
+  /** @type {{ x: number; y: number; kind: string; hp: number; maxHp: number; r: number; speed: number; contactDmg: number; rot: number; hitFlashMs: number; [k: string]: unknown }[]} */
   let enemies = [];
   let xpOrbs = [];
   let xp = 0;
@@ -186,10 +248,69 @@ export function createSurvivor(canvas, hooks) {
   /** @type {{ spawnAt: number; ang: number; dmg: number }[]} */
   let pendingShots = [];
   let pendingLevelUps = 0;
-  let waveClear = false;
-  let waveCountdown = 0;
+  /** 非 Boss 波剩余战斗时间（ms），Boss 波为 0 */
+  let waveCombatRemainMs = 0;
 
   const keys = { up: false, down: false, left: false, right: false };
+
+  /** 左键激活：枪口朝画布内鼠标；右键或指针离开画布恢复自动索敌 */
+  let manualGunAim = false;
+  let manualAimX = 0;
+  let manualAimY = 0;
+  let pointerEventsBound = false;
+
+  function updateManualAimFromClient(clientX, clientY) {
+    const r = canvas.getBoundingClientRect();
+    const sx = canvas.width / r.width;
+    const sy = canvas.height / r.height;
+    manualAimX = (clientX - r.left) * sx;
+    manualAimY = (clientY - r.top) * sy;
+  }
+
+  function onCanvasMouseDown(e) {
+    if (!running || phase !== "combat") return;
+    if (e.button === 0) {
+      manualGunAim = true;
+      updateManualAimFromClient(e.clientX, e.clientY);
+    }
+  }
+
+  function onCanvasMouseMove(e) {
+    if (!running || phase !== "combat" || !manualGunAim) return;
+    updateManualAimFromClient(e.clientX, e.clientY);
+  }
+
+  function onCanvasMouseLeave() {
+    manualGunAim = false;
+  }
+
+  function onWindowMouseUp(e) {
+    if (e.button === 0) manualGunAim = false;
+  }
+
+  function onCanvasContextMenu(e) {
+    e.preventDefault();
+  }
+
+  function bindPointerEvents() {
+    if (pointerEventsBound) return;
+    canvas.addEventListener("mousedown", onCanvasMouseDown);
+    canvas.addEventListener("mousemove", onCanvasMouseMove);
+    canvas.addEventListener("mouseleave", onCanvasMouseLeave);
+    canvas.addEventListener("contextmenu", onCanvasContextMenu);
+    window.addEventListener("mouseup", onWindowMouseUp);
+    pointerEventsBound = true;
+  }
+
+  function unbindPointerEvents() {
+    if (!pointerEventsBound) return;
+    canvas.removeEventListener("mousedown", onCanvasMouseDown);
+    canvas.removeEventListener("mousemove", onCanvasMouseMove);
+    canvas.removeEventListener("mouseleave", onCanvasMouseLeave);
+    canvas.removeEventListener("contextmenu", onCanvasContextMenu);
+    window.removeEventListener("mouseup", onWindowMouseUp);
+    pointerEventsBound = false;
+  }
 
   let waveSpawnTarget = 0;
   let waveSpawnedCount = 0;
@@ -199,13 +320,30 @@ export function createSurvivor(canvas, hooks) {
   let tankWaveSpawned = 0;
   let tankSpawnAccMs = 0;
   let bossTankSpawnAccMs = 0;
+  let speedsterWaveTarget = 0;
+  let speedsterWaveSpawned = 0;
+  let speedsterSpawnAccMs = 0;
+  let carrierWaveTarget = 0;
+  let carrierWaveSpawned = 0;
+  let carrierSpawnAccMs = 0;
+  let bossSpeedsterAccMs = 0;
+  let bossCarrierAccMs = 0;
 
   const margin = PLAYER_HIT_R + 6;
+
+  function enemyMinionSpeed() {
+    return Math.min(1.8 + wave * 0.08, 2.8) * ENEMY_MOVE_MULT;
+  }
+
+  function countEnemiesByKind(k) {
+    return enemies.filter((e) => e.kind === k).length;
+  }
 
   function halt() {
     running = false;
     cancelAnimationFrame(raf);
     raf = 0;
+    unbindPointerEvents();
   }
 
   function syncHud() {
@@ -213,6 +351,8 @@ export function createSurvivor(canvas, hooks) {
       ? enemies.length
       : Math.max(0, waveSpawnTarget - waveSpawnedCount)
           + Math.max(0, tankWaveTarget - tankWaveSpawned)
+          + Math.max(0, speedsterWaveTarget - speedsterWaveSpawned)
+          + Math.max(0, carrierWaveTarget - carrierWaveSpawned)
           + enemies.length;
     hooks.onHud({
       hp: Math.max(0, Math.ceil(hp)),
@@ -250,8 +390,7 @@ export function createSurvivor(canvas, hooks) {
     level = 0;
     pendingShots = [];
     pendingLevelUps = 0;
-    waveClear = false;
-    waveCountdown = 0;
+    waveCombatRemainMs = 0;
     waveSpawnTarget = 0;
     waveSpawnedCount = 0;
     spawnAccMs = 0;
@@ -260,6 +399,15 @@ export function createSurvivor(canvas, hooks) {
     tankWaveSpawned = 0;
     tankSpawnAccMs = 0;
     bossTankSpawnAccMs = 0;
+    speedsterWaveTarget = 0;
+    speedsterWaveSpawned = 0;
+    speedsterSpawnAccMs = 0;
+    carrierWaveTarget = 0;
+    carrierWaveSpawned = 0;
+    carrierSpawnAccMs = 0;
+    bossSpeedsterAccMs = 0;
+    bossCarrierAccMs = 0;
+    manualGunAim = false;
     syncHud();
   }
 
@@ -278,30 +426,113 @@ export function createSurvivor(canvas, hooks) {
     return { x: pad, y: pad + Math.random() * (H - 2 * pad) };
   }
 
-  function spawnSquareAtEdge() {
-    const p = randomEdgePoint();
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {{
+   *   speedMult?: number;
+   *   noXpDrop?: boolean;
+   *   sprintMs?: number;
+   *   sprintMult?: number;
+   * } | undefined} [opts]
+   */
+  function spawnSquareEnemyAt(x, y, opts) {
     const dmg = normalEnemyContactDamage(wave);
-    const spd = Math.min(1.8 + wave * 0.08, 2.8);
+    const baseSpd = enemyMinionSpeed();
+    const spdMult = opts && typeof opts.speedMult === "number" ? opts.speedMult : 1;
+    const sprintMs = opts && typeof opts.sprintMs === "number" ? opts.sprintMs : 0;
+    const sprintMult =
+      opts && typeof opts.sprintMult === "number" ? opts.sprintMult : 0;
+    let spd = baseSpd * spdMult;
+    let sprintRemainMs = 0;
+    if (sprintMs > 0 && sprintMult > 0) {
+      spd = baseSpd * sprintMult;
+      sprintRemainMs = sprintMs;
+    }
     const hpVal = Math.round(17 + wave * 6 + Math.floor(wave / 3) * 5);
     enemies.push({
-      x: p.x,
-      y: p.y,
+      x,
+      y,
       kind: "square",
       hp: hpVal,
       maxHp: hpVal,
       r: ENEMY_HIT_R,
       speed: spd,
-      contactDmg: dmg,
+      baseSpeed: baseSpd,
+      contactDmg: dmg + 5,
       rot: Math.random() * Math.PI,
       hitFlashMs: 0,
+      hitRangeMult: SQUARE_HIT_RANGE_MULT,
+      noXpDrop: !!(opts && opts.noXpDrop),
+      ...(sprintRemainMs > 0 ? { sprintRemainMs } : {}),
+    });
+  }
+
+  function spawnSquareAtEdge() {
+    const p = randomEdgePoint();
+    spawnSquareEnemyAt(p.x, p.y);
+  }
+
+  function spawnSpeedsterAtEdge() {
+    const p = randomEdgePoint();
+    const dmg = normalEnemyContactDamage(wave) + 5;
+    const minionSpd = enemyMinionSpeed();
+    const spd = minionSpd * 1.5;
+    const hpVal = Math.round((17 + wave * 6 + Math.floor(wave / 3) * 5) * 0.8);
+    const dashSpd = minionSpd * 5;
+    enemies.push({
+      x: p.x,
+      y: p.y,
+      kind: "speedster",
+      phase: "chase",
+      hp: hpVal,
+      maxHp: hpVal,
+      r: SPEEDSTER_R,
+      speed: spd,
+      baseSpeed: spd,
+      contactDmg: Math.round(dmg * 0.5),
+      dashDmg: Math.round(dmg * 2),
+      rot: Math.random() * Math.PI,
+      hitFlashMs: 0,
+      hitRangeMult: SQUARE_HIT_RANGE_MULT,
+      chargeMs: 0,
+      dashLeft: 0,
+      dashDirX: 0,
+      dashDirY: 0,
+      dashSpeed: dashSpd,
+      trail: /** @type {{ x: number; y: number; ms: number }[]} */ ([]),
+    });
+  }
+
+  function spawnCarrierAtEdge() {
+    const p = randomEdgePoint();
+    const minionSpd = enemyMinionSpeed();
+    const spd = minionSpd * CARRIER_PRE_SPLIT_SPEED_MULT;
+    const dmg = normalEnemyContactDamage(wave) + 5;
+    const baseHp = Math.round(17 + wave * 6 + Math.floor(wave / 3) * 5);
+    const hpVal = Math.round(baseHp * 3.6 * 2);
+    enemies.push({
+      x: p.x,
+      y: p.y,
+      kind: "carrier",
+      hp: hpVal,
+      maxHp: hpVal,
+      r: CARRIER_R,
+      speed: spd,
+      baseSpeed: minionSpd,
+      contactDmg: Math.round(dmg * 1.5),
+      rot: 0,
+      hitFlashMs: 0,
+      childrenReleased: false,
+      hitRangeMult: STRICT_HIT_RANGE_MULT,
     });
   }
 
   function spawnTankAtEdge() {
     const p = randomEdgePoint();
     const dmg = normalEnemyContactDamage(wave);
-    const minionSpd = Math.min(1.8 + wave * 0.08, 2.8);
-    const spd = minionSpd * 1.1;
+    const minionSpd = enemyMinionSpeed();
+    const spd = minionSpd * 0.9;
     const minionHp = Math.round(17 + wave * 6 + Math.floor(wave / 3) * 5);
     const hpMult = 2 + Math.floor(Math.random() * 2);
     const hpVal = Math.round(minionHp * hpMult);
@@ -316,6 +547,7 @@ export function createSurvivor(canvas, hooks) {
       contactDmg: dmg,
       rot: Math.random() * Math.PI,
       hitFlashMs: 0,
+      hitRangeMult: STRICT_HIT_RANGE_MULT,
     });
   }
 
@@ -332,12 +564,18 @@ export function createSurvivor(canvas, hooks) {
       contactDmg: 50,
       rot: 0,
       hitFlashMs: 0,
+      hitRangeMult: STRICT_HIT_RANGE_MULT,
     });
   }
 
-  /** 新一波：清空场上怪，从边缘按间隔陆续刷出（首只也有延迟） */
-  function startWaveSpawning() {
-    enemies = [];
+  /**
+   * 新一波：重置刷怪计数；默认可清空场上怪。
+   * @param {boolean} [preserveEnemies] 为 true 时保留现有敌人（倒计时结束叠加入场）；进 Boss 波应仍清空。
+   */
+  function startWaveSpawning(preserveEnemies = false) {
+    if (!preserveEnemies) {
+      enemies = [];
+    }
     pendingShots = [];
     waveSpawnedCount = 0;
     spawnAccMs = 0;
@@ -348,13 +586,31 @@ export function createSurvivor(canvas, hooks) {
       waveSpawnTarget = 0;
       tankWaveTarget = 0;
       bossSpawned = false;
+      speedsterWaveTarget = 0;
+      speedsterWaveSpawned = 0;
+      speedsterSpawnAccMs = 0;
+      carrierWaveTarget = 0;
+      carrierWaveSpawned = 0;
+      carrierSpawnAccMs = 0;
+      bossSpeedsterAccMs = 0;
+      bossCarrierAccMs = 0;
     } else {
-      waveSpawnTarget = 5 + wave * 3 + Math.floor((wave - 1) / 2);
+      let sq = 5 + wave * 3 + Math.floor((wave - 1) / 2);
+      if (isCarrierInsertWave(wave)) sq += 4;
+      waveSpawnTarget = sq;
       tankWaveTarget =
         wave >= TANK_FIRST_WAVE
           ? Math.min(5, 3 + Math.floor((wave - TANK_FIRST_WAVE) / 2))
           : 0;
+      speedsterWaveTarget = speedsterSpawnTargetForWave(wave);
+      speedsterWaveSpawned = 0;
+      speedsterSpawnAccMs = 0;
+      carrierWaveTarget = carrierSpawnTargetForWave(wave);
+      carrierWaveSpawned = 0;
+      carrierSpawnAccMs = 0;
     }
+    waveCombatRemainMs =
+      wave === BOSS_WAVE ? 0 : WAVE_COMBAT_DURATION_MS;
   }
 
   function nearestEnemy() {
@@ -384,19 +640,19 @@ export function createSurvivor(canvas, hooks) {
 
   function scheduleVolleyFrom(t0) {
     const dmg = BASE_BULLET_DMG * damageMult;
-    let delay = 0;
-    let lastT = t0;
     for (let s = 0; s < shotsPerVolley; s++) {
       const shotOff = (s - (shotsPerVolley - 1) / 2) * VOLLEY_SPREAD_RAD;
       const ang = gunAngle + shotOff;
       for (let b = 0; b < bulletCount; b++) {
-        const spawnAt = t0 + delay;
-        pendingShots.push({ spawnAt, ang, dmg });
-        lastT = spawnAt;
-        delay += BULLET_STAGGER_MS;
+        pendingShots.push({
+          spawnAt: t0 + b * BULLET_STAGGER_MS,
+          ang,
+          dmg,
+        });
       }
     }
-    return lastT + BULLET_STAGGER_MS;
+    const volleySpan = Math.max(0, (bulletCount - 1) * BULLET_STAGGER_MS);
+    return t0 + volleySpan + BULLET_STAGGER_MS;
   }
 
   function flushPendingShots(now) {
@@ -416,23 +672,23 @@ export function createSurvivor(canvas, hooks) {
         bulletCount += 1;
         break;
       case "damage":
-        damageMult *= 1.15;
+        damageMult *= 1.1;
         break;
       case "pierce":
         pierceExtra += 1;
         break;
       case "atkspd":
-        atkSpdMult *= 1.08;
+        atkSpdMult *= 1.2;
         break;
       case "heavyfire":
-        damageMult *= 1.15;
+        damageMult *= 1.25;
         moveSpeedMult *= 0.97;
         break;
       case "weakpoint":
         critChance = 0.05;
         break;
       case "swiftwalk":
-        moveSpeedMult *= 1.06;
+        moveSpeedMult *= 1.08;
         break;
       case "fullheal":
         hp = PLAYER_MAX_HP;
@@ -517,6 +773,8 @@ export function createSurvivor(canvas, hooks) {
     return (
       waveSpawnedCount >= waveSpawnTarget
       && tankWaveSpawned >= tankWaveTarget
+      && speedsterWaveSpawned >= speedsterWaveTarget
+      && carrierWaveSpawned >= carrierWaveTarget
       && enemies.length === 0
     );
   }
@@ -527,6 +785,7 @@ export function createSurvivor(canvas, hooks) {
     lastT = now;
 
     if (phase === "cards") {
+      manualGunAim = false;
       draw();
       raf = requestAnimationFrame(tick);
       return;
@@ -544,28 +803,86 @@ export function createSurvivor(canvas, hooks) {
     if (mx !== 0 || my !== 0) {
       const len = Math.hypot(mx, my);
       const spd = PLAYER_SPEED * moveSpeedMult;
-      px += (mx / len) * spd * step;
-      py += (my / len) * spd * step;
+      let npx = px + (mx / len) * spd * step;
+      let npy = py + (my / len) * spd * step;
+      npx = Math.max(margin, Math.min(W - margin, npx));
+      npy = Math.max(margin, Math.min(H - margin, npy));
+
+      const solids = enemies.filter(
+        (e) =>
+          e.kind === "tank"
+          || e.kind === "boss"
+          || e.kind === "carrier"
+          || (e.kind === "speedster" && e.phase === "dash"),
+      );
+      for (let pass = 0; pass < 4; pass++) {
+        for (const e of solids) {
+          let dx = npx - e.x;
+          let dy = npy - e.y;
+          let d = Math.hypot(dx, dy);
+          const minD = (PLAYER_HIT_R + e.r) * PLAYER_ENEMY_SEP_MULT;
+          if (d < minD) {
+            if (d < 1e-5) {
+              dx = 1;
+              dy = 0;
+              d = 1;
+            }
+            npx = e.x + (dx / d) * minD;
+            npy = e.y + (dy / d) * minD;
+          }
+        }
+        npx = Math.max(margin, Math.min(W - margin, npx));
+        npy = Math.max(margin, Math.min(H - margin, npy));
+      }
+
+      for (let sqPass = 0; sqPass < 2; sqPass++) {
+        for (const e of enemies) {
+          const pushSquare =
+            e.kind === "square"
+            || (e.kind === "speedster" && e.phase !== "dash");
+          if (!pushSquare) continue;
+          let dx = e.x - npx;
+          let dy = e.y - npy;
+          let d = Math.hypot(dx, dy);
+          const minD = (PLAYER_HIT_R + e.r) * PLAYER_ENEMY_SEP_MULT;
+          if (d < minD) {
+            if (d < 1e-5) {
+              const ang = Math.random() * Math.PI * 2;
+              dx = Math.cos(ang);
+              dy = Math.sin(ang);
+              d = 1;
+            }
+            const overlap = minD - d;
+            const nx = dx / d;
+            const ny = dy / d;
+            const es = SQUARE_PUSH_ENEMY_SHARE;
+            e.x += nx * overlap * es;
+            e.y += ny * overlap * es;
+            npx -= nx * overlap * (1 - es);
+            npy -= ny * overlap * (1 - es);
+          }
+        }
+        npx = Math.max(margin, Math.min(W - margin, npx));
+        npy = Math.max(margin, Math.min(H - margin, npy));
+      }
+
+      px = npx;
+      py = npy;
       const moveAngle = Math.atan2(my, mx);
       headAngle = lerpAngle(headAngle, moveAngle, 1 - Math.pow(1 - HEAD_LERP_SPEED, step));
+    } else {
+      px = Math.max(margin, Math.min(W - margin, px));
+      py = Math.max(margin, Math.min(H - margin, py));
     }
-    px = Math.max(margin, Math.min(W - margin, px));
-    py = Math.max(margin, Math.min(H - margin, py));
-
     const nearest = nearestEnemy();
-    const gunTarget = nearest ? Math.atan2(nearest.y - py, nearest.x - px) : headAngle;
+    const gunTarget = manualGunAim
+      ? Math.atan2(manualAimY - py, manualAimX - px)
+      : nearest
+        ? Math.atan2(nearest.y - py, nearest.x - px)
+        : headAngle;
     gunAngle = lerpAngle(gunAngle, gunTarget, 1 - Math.pow(1 - GUN_LERP_SPEED, step));
 
-    if (waveClear) {
-      waveCountdown -= dt;
-      if (waveCountdown <= 0) {
-        waveClear = false;
-        wave++;
-        startWaveSpawning();
-      }
-    }
-
-    if (!waveClear) {
+    {
       if (wave === BOSS_WAVE) {
         spawnAccMs += dt;
         if (!bossSpawned) {
@@ -595,6 +912,22 @@ export function createSurvivor(canvas, hooks) {
             bossTankSpawnAccMs -= tankIv;
             spawnTankAtEdge();
           }
+          bossSpeedsterAccMs += dt;
+          while (
+            bossSpeedsterAccMs >= interval * 2.35
+            && countEnemiesByKind("speedster") < 3
+          ) {
+            bossSpeedsterAccMs -= interval * 2.35;
+            spawnSpeedsterAtEdge();
+          }
+          bossCarrierAccMs += dt;
+          while (
+            bossCarrierAccMs >= interval * 3.05
+            && countEnemiesByKind("carrier") < 2
+          ) {
+            bossCarrierAccMs -= interval * 3.05;
+            spawnCarrierAtEdge();
+          }
         }
       } else {
         const interval = spawnIntervalForWave(wave);
@@ -617,6 +950,40 @@ export function createSurvivor(canvas, hooks) {
             tankSpawnAccMs -= tThr;
             spawnTankAtEdge();
             tankWaveSpawned++;
+          }
+        }
+        const capSp = 4;
+        if (speedsterWaveSpawned < speedsterWaveTarget) {
+          speedsterSpawnAccMs += dt;
+          let sg = 25;
+          while (
+            sg-- > 0
+            && speedsterWaveSpawned < speedsterWaveTarget
+            && countEnemiesByKind("speedster") < capSp
+          ) {
+            const sThr =
+              speedsterWaveSpawned === 0 ? FIRST_SPAWN_DELAY_MS + 550 : interval * 1.06;
+            if (speedsterSpawnAccMs < sThr) break;
+            speedsterSpawnAccMs -= sThr;
+            spawnSpeedsterAtEdge();
+            speedsterWaveSpawned++;
+          }
+        }
+        const capCar = 3;
+        if (carrierWaveSpawned < carrierWaveTarget) {
+          carrierSpawnAccMs += dt;
+          let cg = 25;
+          while (
+            cg-- > 0
+            && carrierWaveSpawned < carrierWaveTarget
+            && countEnemiesByKind("carrier") < capCar
+          ) {
+            const cThr =
+              carrierWaveSpawned === 0 ? FIRST_SPAWN_DELAY_MS + 700 : interval * 1.22;
+            if (carrierSpawnAccMs < cThr) break;
+            carrierSpawnAccMs -= cThr;
+            spawnCarrierAtEdge();
+            carrierWaveSpawned++;
           }
         }
       }
@@ -645,14 +1012,144 @@ export function createSurvivor(canvas, hooks) {
       (b) => b.x > -20 && b.x < W + 20 && b.y > -20 && b.y < H + 20,
     );
 
+    const detectR = SPEEDSTER_DETECT_GRIDS * GRID;
+    const lockBreakR = SPEEDSTER_LOCK_BREAK_GRIDS * GRID;
+    const dashLen = SPEEDSTER_DASH_GRIDS * GRID;
     for (const e of enemies) {
-      const dx = px - e.x;
-      const dy = py - e.y;
-      const d = Math.hypot(dx, dy) || 1;
-      e.x += (dx / d) * e.speed * step;
-      e.y += (dy / d) * e.speed * step;
-      e.rot += (dt / 400) * (e.kind === "boss" ? 0.35 : e.kind === "tank" ? 0.65 : 1.1);
+      if (
+        e.kind === "square"
+        && typeof e.sprintRemainMs === "number"
+        && e.sprintRemainMs > 0
+      ) {
+        e.sprintRemainMs -= dt;
+        if (e.sprintRemainMs <= 0) {
+          e.speed = /** @type {number} */ (e.baseSpeed);
+          delete e.sprintRemainMs;
+        }
+      }
       e.hitFlashMs = Math.max(0, e.hitFlashMs - dt);
+      if (e.kind === "speedster") {
+        const dashSpd = /** @type {number} */ (e.dashSpeed);
+        const aimPlayerRot = () =>
+          Math.atan2(py - e.y, px - e.x) + Math.PI / 2;
+        if (e.phase === "charge") {
+          const distP = Math.hypot(px - e.x, py - e.y);
+          if (distP > lockBreakR) {
+            e.phase = "chase";
+            e.chargeMs = 0;
+          }
+        }
+        if (e.phase === "charge") {
+          e.rot = lerpAngle(
+            e.rot,
+            aimPlayerRot(),
+            1 - Math.pow(1 - SPEEDSTER_CHASE_LERP_SPEED, step),
+          );
+          e.chargeMs = /** @type {number} */ (e.chargeMs) + dt;
+          if (e.chargeMs >= SPEEDSTER_CHARGE_MS) {
+            let ddx = px - e.x;
+            let ddy = py - e.y;
+            let dd = Math.hypot(ddx, ddy);
+            if (dd < 1e-4) {
+              ddx = 1;
+              ddy = 0;
+              dd = 1;
+            }
+            e.dashDirX = ddx / dd;
+            e.dashDirY = ddy / dd;
+            e.dashLeft = dashLen;
+            e.phase = "dash";
+            e.chargeMs = 0;
+          }
+        } else if (e.phase === "dash") {
+          const dashAim =
+            Math.atan2(
+              /** @type {number} */ (e.dashDirY),
+              /** @type {number} */ (e.dashDirX),
+            ) + Math.PI / 2;
+          e.rot = lerpAngle(
+            e.rot,
+            dashAim,
+            1 - Math.pow(1 - SPEEDSTER_CHASE_LERP_SPEED, step),
+          );
+          const move = Math.min(
+            dashSpd * step,
+            /** @type {number} */ (e.dashLeft),
+          );
+          e.x += /** @type {number} */ (e.dashDirX) * move;
+          e.y += /** @type {number} */ (e.dashDirY) * move;
+          e.dashLeft = /** @type {number} */ (e.dashLeft) - move;
+          const tr = /** @type {{ x: number; y: number; ms: number }[]} */ (e.trail);
+          tr.push({ x: e.x, y: e.y, ms: SPEEDSTER_TRAIL_DOT_MS });
+          if (tr.length > 28) tr.splice(0, tr.length - 28);
+          if (/** @type {number} */ (e.dashLeft) <= 0) {
+            e.phase = "chase";
+          }
+        } else {
+          e.rot = lerpAngle(
+            e.rot,
+            aimPlayerRot(),
+            1 - Math.pow(1 - SPEEDSTER_CHASE_LERP_SPEED, step),
+          );
+          const dch = Math.hypot(px - e.x, py - e.y);
+          if (dch <= detectR) {
+            e.phase = "charge";
+            e.chargeMs = 0;
+          } else {
+            const dx = px - e.x;
+            const dy = py - e.y;
+            const d = dch || 1;
+            e.x += (dx / d) * e.speed * step;
+            e.y += (dy / d) * e.speed * step;
+          }
+        }
+        const trAll = /** @type {{ x: number; y: number; ms: number }[]} */ (e.trail);
+        for (const dot of trAll) dot.ms -= dt;
+        while (trAll.length && trAll[0].ms <= 0) trAll.shift();
+      } else if (e.kind === "carrier") {
+        if (!e.childrenReleased && e.hp <= e.maxHp * 0.5) {
+          e.childrenReleased = true;
+          const L = CARRIER_CELL;
+          const half = L / 2;
+          const corners = [
+            [-half, -half],
+            [half, -half],
+            [-half, half],
+            [half, half],
+          ];
+          const m = enemyMinionSpeed();
+          e.speed = m;
+          e.baseSpeed = m;
+          for (const [lx, ly] of corners) {
+            const wx =
+              e.x + Math.cos(e.rot) * lx - Math.sin(e.rot) * ly;
+            const wy =
+              e.y + Math.sin(e.rot) * lx + Math.cos(e.rot) * ly;
+            spawnSquareEnemyAt(wx, wy, {
+              noXpDrop: true,
+              sprintMs: CARRIER_CHILD_SPRINT_MS,
+              sprintMult: CARRIER_CHILD_SPRINT_MULT,
+            });
+          }
+        }
+        e.rot = lerpAngle(
+          e.rot,
+          Math.atan2(py - e.y, px - e.x) + Math.PI / 2,
+          1 - Math.pow(1 - 0.14, step),
+        );
+        const dx = px - e.x;
+        const dy = py - e.y;
+        const d = Math.hypot(dx, dy) || 1;
+        e.x += (dx / d) * e.speed * step;
+        e.y += (dy / d) * e.speed * step;
+      } else {
+        const dx = px - e.x;
+        const dy = py - e.y;
+        const d = Math.hypot(dx, dy) || 1;
+        e.x += (dx / d) * e.speed * step;
+        e.y += (dy / d) * e.speed * step;
+        e.rot += (dt / 400) * (e.kind === "boss" ? 0.35 : e.kind === "tank" ? 0.65 : 1.1);
+      }
     }
 
     const edgePad = 4;
@@ -701,7 +1198,7 @@ export function createSurvivor(canvas, hooks) {
         e.hitFlashMs = ENEMY_HIT_FLASH_MS;
         b.pierceLeft -= 1;
         if (e.hp <= 0) {
-          if (e.kind !== "boss" && level < LEVEL_MAX) {
+          if (e.kind !== "boss" && level < LEVEL_MAX && !e.noXpDrop) {
             if (e.kind === "tank") {
               xpOrbs.push({
                 x: e.x,
@@ -711,6 +1208,26 @@ export function createSurvivor(canvas, hooks) {
                 collecting: false,
                 collected: false,
               });
+            } else if (e.kind === "carrier") {
+              xpOrbs.push({
+                x: e.x,
+                y: e.y,
+                value: XP_PER_ORB * 2,
+                kind: "blue",
+                collecting: false,
+                collected: false,
+              });
+            } else if (e.kind === "speedster") {
+              if (Math.random() < 0.8) {
+                xpOrbs.push({
+                  x: e.x,
+                  y: e.y,
+                  value: XP_PER_ORB,
+                  kind: "green",
+                  collecting: false,
+                  collected: false,
+                });
+              }
             } else if (Math.random() < XP_DROP_CHANCE) {
               xpOrbs.push({
                 x: e.x,
@@ -761,8 +1278,20 @@ export function createSurvivor(canvas, hooks) {
 
     if (invulnMs <= 0) {
       for (const e of enemies) {
-        if (Math.hypot(px - e.x, py - e.y) < PLAYER_HIT_R + e.r) {
-          hp -= e.contactDmg;
+        const baseR = PLAYER_HIT_R + e.r;
+        let mult =
+          e.hitRangeMult !== undefined
+            ? /** @type {number} */ (e.hitRangeMult)
+            : e.kind === "square"
+              ? SQUARE_HIT_RANGE_MULT
+              : STRICT_HIT_RANGE_MULT;
+        let dmg = e.contactDmg;
+        if (e.kind === "speedster" && e.phase === "dash") {
+          mult = STRICT_HIT_RANGE_MULT;
+          dmg = /** @type {number} */ (e.dashDmg);
+        }
+        if (Math.hypot(px - e.x, py - e.y) < baseR * mult) {
+          hp -= dmg;
           invulnMs = INVULN_MS;
           break;
         }
@@ -776,15 +1305,32 @@ export function createSurvivor(canvas, hooks) {
       return;
     }
 
-    if (!waveClear && waveFullyComplete()) {
-      if (wave === BOSS_WAVE) {
-        halt();
-        hooks.onVictory();
-        draw();
-        return;
+    if (waveFullyComplete() && wave === BOSS_WAVE) {
+      halt();
+      hooks.onVictory();
+      draw();
+      return;
+    }
+
+    if (wave !== BOSS_WAVE && waveCombatRemainMs > 0) {
+      if (
+        waveFullyComplete()
+        && waveCombatRemainMs > WAVE_EARLY_CLEAR_SNAP_MS
+      ) {
+        waveCombatRemainMs = WAVE_EARLY_CLEAR_SNAP_MS;
+      } else {
+        waveCombatRemainMs -= dt;
       }
-      waveClear = true;
-      waveCountdown = COUNTDOWN_MS;
+      if (waveCombatRemainMs <= 0) {
+        waveCombatRemainMs = 0;
+        wave++;
+        const keepOld = wave !== BOSS_WAVE;
+        startWaveSpawning(keepOld);
+        for (const orb of xpOrbs) orb.collecting = true;
+      }
+    }
+
+    if (waveFullyComplete() && wave !== BOSS_WAVE) {
       for (const orb of xpOrbs) orb.collecting = true;
     }
 
@@ -810,6 +1356,18 @@ export function createSurvivor(canvas, hooks) {
       ctx.moveTo(0, y);
       ctx.lineTo(W, y);
       ctx.stroke();
+    }
+
+    for (const e of enemies) {
+      if (e.kind === "speedster" && e.trail && /** @type {{ms:number}[]} */ (e.trail).length) {
+        for (const dot of /** @type {{ x: number; y: number; ms: number }[]} */ (e.trail)) {
+          const a = Math.max(0, dot.ms / SPEEDSTER_TRAIL_DOT_MS) * 0.42;
+          ctx.beginPath();
+          ctx.arc(dot.x, dot.y, 2, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(250, 204, 21, ${a})`;
+          ctx.fill();
+        }
+      }
     }
 
     for (const e of enemies) {
@@ -849,6 +1407,74 @@ export function createSurvivor(canvas, hooks) {
           hit ? "rgba(147, 197, 253, 0.65)" : "rgba(59, 130, 246, 0.45)",
           hit ? "#93c5fd" : "#3b82f6",
         );
+      } else if (e.kind === "speedster") {
+        const hit = e.hitFlashMs > 0;
+        if (e.phase === "charge") {
+          const pulse = 0.38 + 0.32 * Math.sin(performance.now() / 70);
+          ctx.save();
+          ctx.globalAlpha = pulse;
+          drawPolygon(
+            ctx,
+            e.x,
+            e.y,
+            SPEEDSTER_VISUAL_R + 5,
+            3,
+            e.rot,
+            "rgba(255,255,255,0.22)",
+            "rgba(255,255,255,0.55)",
+          );
+          ctx.restore();
+        }
+        drawPolygon(
+          ctx,
+          e.x,
+          e.y,
+          SPEEDSTER_VISUAL_R,
+          3,
+          e.rot,
+          hit ? "rgba(253, 224, 71, 0.82)" : "rgba(234, 179, 8, 0.78)",
+          hit ? "#fde047" : "#ca8a04",
+        );
+      } else if (e.kind === "carrier") {
+        const hit = e.hitFlashMs > 0;
+        const L = CARRIER_CELL;
+        const motherFill = hit ? "rgba(88, 28, 135, 0.88)" : "rgba(55, 15, 85, 0.92)";
+        const motherStroke = hit ? "#e9d5ff" : "#a78bfa";
+        const childFill = hit ? "rgba(167, 139, 250, 0.72)" : "rgba(139, 92, 246, 0.62)";
+        const childStroke = hit ? "#c4b5fd" : "#8b5cf6";
+        ctx.save();
+        ctx.translate(e.x, e.y);
+        ctx.rotate(e.rot);
+        if (!e.childrenReleased) {
+          ctx.fillStyle = motherFill;
+          ctx.strokeStyle = motherStroke;
+          ctx.lineWidth = 2.2;
+          ctx.fillRect(-L, -L, 2 * L, 2 * L);
+          ctx.strokeRect(-L, -L, 2 * L, 2 * L);
+          const quads = [
+            [-L, -L],
+            [0, -L],
+            [-L, 0],
+            [0, 0],
+          ];
+          for (const [qx, qy] of quads) {
+            ctx.fillStyle = childFill;
+            ctx.strokeStyle = childStroke;
+            ctx.lineWidth = 1.2;
+            ctx.fillRect(qx, qy, L, L);
+            ctx.strokeRect(qx, qy, L, L);
+          }
+          ctx.strokeStyle = motherStroke;
+          ctx.lineWidth = 2.2;
+          ctx.strokeRect(-L, -L, 2 * L, 2 * L);
+        } else {
+          ctx.fillStyle = motherFill;
+          ctx.strokeStyle = motherStroke;
+          ctx.lineWidth = 2.2;
+          ctx.fillRect(-L, -L, 2 * L, 2 * L);
+          ctx.strokeRect(-L, -L, 2 * L, 2 * L);
+        }
+        ctx.restore();
       } else {
         ctx.save();
         ctx.translate(e.x, e.y);
@@ -931,9 +1557,10 @@ export function createSurvivor(canvas, hooks) {
     ctx.fillStyle = "#eab308";
     ctx.fillRect(0, xpBarY, W * xpRatio, xpBarH);
 
-    if (waveClear && waveCountdown > 0) {
-      const sec = Math.max(1, Math.ceil(waveCountdown / 1000));
-      const msg = `距离下一波还有：${sec}S`;
+    if (wave !== BOSS_WAVE && waveCombatRemainMs > 0) {
+      const rawSec = Math.max(0, Math.ceil(waveCombatRemainMs / 1000));
+      const sec = Math.min(WAVE_COUNTDOWN_UI_CAP_SEC, rawSec);
+      const msg = `下波倒计时：${sec}S`;
       ctx.font = "bold 28px 'JetBrains Mono', ui-monospace, monospace";
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
@@ -952,6 +1579,7 @@ export function createSurvivor(canvas, hooks) {
       running = true;
       lastT = performance.now();
       syncHud();
+      bindPointerEvents();
       raf = requestAnimationFrame(tick);
     },
     stop() {
